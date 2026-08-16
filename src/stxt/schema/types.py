@@ -1,0 +1,268 @@
+"""Schema value types (``stxt-impl/schema/types.txt``; STXT-SCHEMA-SPEC section 9).
+
+Each type knows how to validate the value shape of a node and, optionally, its content.
+Two-property model: value form (INLINE, BLOCK, INLINE/BLOCK or NONE) and whether children
+are accepted (only INLINE and GROUP accept children; the rest are leaves).
+
+Following the blueprint, every type lives in this one module; they are registered once in
+:class:`TypeRegistry` at import time.
+"""
+
+from __future__ import annotations
+
+import re
+from abc import ABC, abstractmethod
+from typing import Optional
+
+from ..core.node import InlineNode, Node, TextNode
+from ..core.platform import is_valid_base64, parse_uri
+from ..core.string_utils import is_empty
+from ..exceptions import RuntimeException, ValidationException
+from .node_definition import NodeDefinition
+
+
+class Type(ABC):
+    """A schema value type, identified by its name as written in ``Type:``."""
+
+    @abstractmethod
+    def get_name(self) -> str:
+        """Name of the type, as written in ``Type:``."""
+
+    @abstractmethod
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        """Validates ``node`` against its definition.
+
+        Raises:
+            ValidationException: on failure.
+        """
+
+
+def _not_allowed_text(n: Node) -> ValidationException:
+    return ValidationException(n.get_line(), "NOT_ALLOWED_TEXT",
+                               f"Not allowed text in node {n.get_qualified_name()}")
+
+
+def binary_value(node: Node) -> str:
+    """Effective value for the INLINE/BLOCK binary types (HEXADECIMAL, BINARY, BASE64).
+
+    In BLOCK form, validation applies to the concatenation of the lines, ignoring line
+    breaks, empty lines and the leading and trailing spaces or tabs of each line. Whitespace
+    INSIDE a line is kept (and is therefore invalid content).
+    """
+    if not isinstance(node, TextNode):
+        return node.get_text()
+    return "".join(line.strip() for line in node.get_text_lines())
+
+
+# ---------------------------------------------------------------- structural types
+
+class INLINE(Type):
+    """Optional inline value, no text block. Accepts children. Default type."""
+
+    def get_name(self) -> str:
+        return "INLINE"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if node.is_text_node():
+            raise _not_allowed_text(node)
+
+
+class GROUP(Type):
+    """Structure only (children). Neither an inline value nor a ``>>`` block."""
+
+    def get_name(self) -> str:
+        return "GROUP"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if node.is_text_node() or not is_empty(node.get_text()):
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"Node '{node.get_name()}' has to be empty")
+
+
+class BLOCK(Type):
+    """Text block ``>>`` only. The inline form is not allowed."""
+
+    def get_name(self) -> str:
+        return "BLOCK"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if not node.is_text_node():
+            raise ValidationException(node.get_line(), "BLOCK_FORM_REQUIRED",
+                                      f"Node {node.get_qualified_name()} requires block form '>>'")
+
+
+class TEXT(Type):
+    """Free text, inline or block. No children allowed."""
+
+    def get_name(self) -> str:
+        return "TEXT"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if isinstance(node, InlineNode) and len(node.get_children()) > 0:
+            raise ValidationException(node.get_line(), "NOT_ALLOWED_CHILDREN_TEXT",
+                                      f"Not allowed children nodes in node {node.get_qualified_name()}")
+
+
+class MARKDOWN(Type):
+    """Markdown content (9.7). For validation it is equivalent to TEXT: only children are forbidden."""
+
+    def get_name(self) -> str:
+        return "MARKDOWN"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if isinstance(node, InlineNode) and len(node.get_children()) > 0:
+            raise ValidationException(node.get_line(), "NOT_ALLOWED_CHILDREN_TEXT",
+                                      f"Not allowed children nodes in node {node.get_qualified_name()}")
+
+
+class ENUM(Type):
+    """The inline value must match exactly (case-sensitive) one of the allowed values."""
+
+    def get_name(self) -> str:
+        return "ENUM"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if node.is_text_node():
+            raise _not_allowed_text(node)
+        value = node.get_text()
+        if not ns_node.is_allowed_value(value):
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"The value '{value}' not allowed. Only: {ns_node.get_values()}")
+
+
+# ---------------------------------------------------------------- regex types
+
+class RegexValue(Type):
+    """Base class: INLINE value form only; the value is checked against a pattern."""
+
+    def __init__(self, name: str, pattern: str, error: str) -> None:
+        self._name = name
+        # ASCII digits only, like the \d of the JS and Java ports
+        self._pattern = re.compile(pattern, re.ASCII)
+        self._error = error
+
+    def get_name(self) -> str:
+        return self._name
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if node.is_text_node():
+            raise _not_allowed_text(node)
+        value = node.get_text()
+        if self._pattern.fullmatch(value) is None:
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"{node.get_name()}: {self._error} ({value})")
+
+
+BOOLEAN = RegexValue("BOOLEAN", r"(true|false)", "Invalid boolean")
+NUMBER = RegexValue("NUMBER", r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", "Invalid number")
+INTEGER = RegexValue("INTEGER", r"[-+]?\d+", "Invalid integer")
+NATURAL = RegexValue("NATURAL", r"\d+", "Invalid natural")
+DATE = RegexValue("DATE", r"\d{4}-\d{2}-\d{2}", "Invalid date")
+TIME = RegexValue("TIME", r"\d{2}:\d{2}:\d{2}", "Invalid time")
+TIMESTAMP = RegexValue("TIMESTAMP",
+                       r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{3})?)?(Z|[+-]\d{2}:\d{2})?",
+                       "Invalid timestamp")
+UUID = RegexValue("UUID", r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+                  "Invalid UUID")
+EMAIL = RegexValue("EMAIL",
+                   r"(?=.{1,256}$)(?=.{1,64}@.{1,255}$)(?=.{1,64}@.{1,63}\..{1,63}$)"
+                   r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}",
+                   "Invalid email")
+
+
+# ---------------------------------------------------------------- specific types
+
+class URL(Type):
+    """URI with mandatory scheme and host. INLINE value form only."""
+
+    def get_name(self) -> str:
+        return "URL"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if node.is_text_node():
+            raise _not_allowed_text(node)
+        url = node.get_text()
+        uri = parse_uri(url)
+        if uri is None or not uri.scheme or not uri.hostname:
+            raise ValidationException(node.get_line(), "INVALID_VALUE", "Invalid URL: " + url)
+
+
+class HEXADECIMAL(Type):
+    """Hexadecimal string ``[0-9A-Fa-f]+`` (9.5). INLINE or BLOCK form."""
+
+    _PATTERN = re.compile(r"[0-9A-Fa-f]+")
+
+    def get_name(self) -> str:
+        return "HEXADECIMAL"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        value = binary_value(node)
+        if self._PATTERN.fullmatch(value) is None:
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"{node.get_name()}: Invalid hexadecimal ({value})")
+
+
+class BINARY(Type):
+    """String of zeros and ones ``[01]+`` (9.5). INLINE or BLOCK form."""
+
+    _PATTERN = re.compile(r"[01]+")
+
+    def get_name(self) -> str:
+        return "BINARY"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        value = binary_value(node)
+        if self._PATTERN.fullmatch(value) is None:
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"{node.get_name()}: Invalid binary ({value})")
+
+
+class BASE64(Type):
+    """Decodable Base64 content (9.5). INLINE or BLOCK form."""
+
+    def get_name(self) -> str:
+        return "BASE64"
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if not is_valid_base64(binary_value(node)):
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"Node '{node.get_name()}' Invalid Base64")
+
+
+# ---------------------------------------------------------------- registry
+
+class TypeRegistry:
+    """Registry of the supported types (the 18 of STXT-SCHEMA-SPEC), by name."""
+
+    _registry: dict[str, Type] = {}
+
+    @classmethod
+    def get(cls, node_type: str) -> Optional[Type]:
+        """The type with that name, or ``None`` if it is not supported."""
+        return cls._registry.get(node_type)
+
+    @staticmethod
+    def admits_children(node_type: str) -> bool:
+        """STXT-SCHEMA-SPEC 9.1 / STXT-TEMPLATE-SPEC 8.2: only INLINE and GROUP admit children."""
+        return node_type in ("INLINE", "GROUP")
+
+    @classmethod
+    def register(cls, instance: Type) -> None:
+        """Raises ``DUPLICATED_TYPE`` if a type with that name already exists."""
+        if instance.get_name() in cls._registry:
+            raise RuntimeException("DUPLICATED_TYPE", "Type already defined: " + instance.get_name())
+        cls._registry[instance.get_name()] = instance
+
+    @classmethod
+    def names(cls) -> list[str]:
+        """The names of the registered types, in registration order."""
+        return list(cls._registry.keys())
+
+
+for _type in (INLINE(), BLOCK(), TEXT(), MARKDOWN(), BOOLEAN, URL(), INTEGER, NATURAL, NUMBER, DATE,
+              TIME, TIMESTAMP, UUID, EMAIL, HEXADECIMAL(), BINARY(), BASE64(), GROUP(), ENUM()):
+    TypeRegistry.register(_type)
+del _type
+
+
+__all__ = ["Type", "TypeRegistry", "RegexValue", "binary_value"]
