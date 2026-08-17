@@ -85,7 +85,14 @@ def test_enum_is_case_sensitive_and_inline_only():
     ("TIMESTAMP", ["2026-08-16T10:30", "2026-08-16T10:30:00", "2026-08-16T10:30:00.123Z", "2026-08-16T10:30:00+02:00"],
      ["2026-08-16", "2026-08-16 10:30:00"]),
     ("UUID", ["123e4567-e89b-12d3-a456-426614174000", "123E4567-E89B-12D3-A456-426614174000"], ["123e4567e89b12d3a456426614174000", "x"]),
-    ("EMAIL", ["ana@example.com", "a.b+c@sub.example.org"], ["ana@", "@example.com", "ana@localhost", "a b@example.com"]),
+    ("EMAIL",
+     # STXT-SCHEMA-SPEC 9.4: bare address, or display name followed by the address between angle brackets
+     ["ana@example.com", "a.b+c@sub.example.org", "Ana García <ana@example.com>", "Ana<ana@example.com>",
+      "Ana García   <ana@example.com>", '"García, Ana" <ana@example.com>'],
+     # the bracketed form needs a name, balanced brackets, a valid address and nothing after
+     ["ana@", "@example.com", "ana@localhost", "a b@example.com", "<ana@example.com>", "   <ana@example.com>",
+      "Ana <ana@>", "Ana <ana@localhost>", "Ana <ana@example.com", "Ana ana@example.com>", "Ana ana@example.com",
+      "Ana <ana@example.com> extra", "Ana <ana@example.com> <ana@example.com>", "Ana <<ana@example.com>>"]),
 ])
 def test_regex_types(type_, good, bad):
     for value in good:
