@@ -96,8 +96,13 @@ class Parser:
 
             line_indent = parse_line(line_string, last_node_block, last_level, line_number)
 
-            # Comment line: produces no node, hand it over to the observers
+            # Comment line: produces no node. A comment at the level of an open block node
+            # (or shallower) closes the block (STXT-SPEC 6.1 and 9.1): a block is a literal
+            # and cannot be commented from inside. Only the block closes; the comment does
+            # not touch the rest of the hierarchy.
             if line_indent.is_comment:
+                if last_node_block:
+                    self._close_to_level(stack, len(stack) - 1, result)
                 for observer in self._observers:
                     observer.on_comment(line_number, line_string)
                 return

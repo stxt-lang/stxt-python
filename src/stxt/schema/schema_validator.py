@@ -29,10 +29,22 @@ class SchemaValidator(Validator):
 
     def validate(self, node: Node) -> list[ValidationException]:
         """Validates the node and, optionally, its subtree. ``SCHEMA_NOT_FOUND`` when the
-        provider has no schema for the node's namespace."""
+        provider has no schema for the node's namespace. A node with the empty namespace is
+        never validated (STXT-SCHEMA-SPEC 5)."""
         errors: list[ValidationException] = []
 
         namespace = node.get_namespace()
+
+        # The empty namespace is never validated (STXT-SCHEMA-SPEC 5): a node that neither
+        # declares nor inherits a namespace is valid by definition, no schema is looked up
+        # for it and SCHEMA_NOT_FOUND is never reported for it. Its children are still
+        # walked when recursive, because one of them may declare a namespace of its own.
+        if namespace == "":
+            if self._recursive_validation and isinstance(node, InlineNode):
+                for n in node.get_children():
+                    errors.extend(self.validate(n))
+            return errors
+
         sch = self._schema_provider.get_schema(namespace)
 
         if sch is None:

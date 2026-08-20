@@ -102,6 +102,13 @@ class TestSchemaProviderContract:
         errors = validator.validate(doc)
         assert [e.code for e in errors] == ["SCHEMA_NOT_FOUND"]
 
+    def test_schema_validator_never_validates_the_empty_namespace_but_does_validate_a_namespaced_node_inside_it(self):
+        # STXT-SCHEMA-SPEC 5
+        validator = SchemaValidator(SchemaProviderMemory(), True)
+        assert validator.validate(Parser().parse("Doc: x\n\tChild: y\n")[0]) == []
+        errors = validator.validate(Parser().parse("Doc: x\n\tFree: y\n\tBound (com.example.unknown): z\n")[0])
+        assert [(e.code, e.line) for e in errors] == [("SCHEMA_NOT_FOUND", 3)]
+
     def test_the_meta_schema_validates_itself(self):
         meta = SchemaProviderMeta()
         doc = Parser().parse(SchemaProviderMeta.META_TEXT)[0]

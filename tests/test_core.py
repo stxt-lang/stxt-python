@@ -35,6 +35,15 @@ def test_invalid_names_are_rejected(line):
     assert codes and codes[0] in ("INVALID_NODE_NAME", "INVALID_LINE"), codes
 
 
+def test_accepts_combining_marks_in_names_and_still_requires_a_letter_or_digit():
+    # STXT-SPEC 4.2: Mn and Mc are name characters; Me is not; a name of only marks is not a name
+    hindi, q = Parser().parse("\u0939\u093f\u0902\u0926\u0940: x\nQ\u0301: y\n")
+    assert hindi.get_canonical_name() == "\u0939\u093f\u0902\u0926\u0940"
+    assert q.get_canonical_name() == "q\u0301"
+    assert _codes("\u0301: only a mark\n") == ["INVALID_NODE_NAME"]
+    assert _codes("a\u20dd: enclosing mark\n") == ["INVALID_NODE_NAME"]
+
+
 # ---------------------------------------------------------------- lines (5, 6, 11)
 
 def test_a_line_without_separator_is_invalid():
@@ -160,6 +169,32 @@ def test_a_block_node_at_eof_has_no_spurious_last_line():
     assert list(_first("T >>\n").get_text_lines()) == []
 
 
+def test_a_comment_at_the_level_of_the_block_node_closes_the_block():
+    # STXT-SPEC 6.1 / 9.1: a block is a literal, it cannot be commented from inside
+    root = _first("Root:\n\tBody >>\n\t\tfirst\n\t\t# still text\n\t# closes the block\n\tAfter: sibling\n")
+    body, after = root.get_children()
+    assert isinstance(body, TextNode)
+    assert list(body.get_text_lines()) == ["first", "# still text"]
+    assert after.get_name() == "After" and after.get_value() == "sibling"
+
+
+def test_a_shallower_comment_also_closes_the_block_and_nothing_else():
+    root = _first("Root:\n\tBody >>\n\t\tline\n# root-level comment\n\tAfter: x\n")
+    assert [c.get_name() for c in root.get_children()] == ["Body", "After"]
+    assert list(root.get_children()[0].get_text_lines()) == ["line"]
+
+
+def test_text_after_a_closing_comment_is_a_parse_error():
+    # The de-indented '#' line no longer vanishes silently: the next text line fails
+    assert _codes("Root:\n\tBody >>\n\t\tfirst\n\t# oops\n\t\tsecond\n") == ["INDENTATION_LEVEL_NOT_VALID"]
+    assert _codes("Body >>\n\tfirst\n# oops\n\tsecond\n") == ["INVALID_LINE"]
+
+
+def test_a_comment_after_the_last_line_of_a_block_is_still_just_a_comment():
+    root = _first("Root:\n\tBody >>\n\t\tonly\n\t# trailing comment\n")
+    assert list(root.get_children()[0].get_text_lines()) == ["only"]
+
+
 # ---------------------------------------------------------------- multi-error mode
 
 def test_parse_result_collects_every_error_and_keeps_going():
@@ -199,13 +234,14 @@ def test_observers_see_the_streaming_events_with_the_parent_already_attached():
     recorder = Recorder()
     parser = Parser()
     parser.register_observer(recorder)
-    parser.parse("# c\nA (com.a.ns): x\n\tT >>\n\t\tline\n\tB: y\n")
+    parser.parse("# c\nA (com.a.ns): x\n\tT >>\n\t\tline\n\t# closes T\n\tB: y\n")
     assert recorder.events == [
         ("comment", 1),
         ("create", "A", 0, "com.a.ns"),
         ("create", "T", 1, "com.a.ns"),
         ("text", "T", "line"),
         ("finish", "T"),
+        ("comment", 5),
         ("create", "B", 1, "com.a.ns"),
         ("finish", "B"),
         ("finish", "A"),

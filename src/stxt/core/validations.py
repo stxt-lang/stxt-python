@@ -16,13 +16,21 @@ NAMESPACE_FORMAT = re.compile(r"@?[a-z0-9]+(\.[a-z0-9]+)+")
 _NAME_SEPARATORS = frozenset("-_ ")
 
 
-def _is_name_char(char: str) -> bool:
-    # STXT-SPEC sections 4.2 / 4.3: Unicode letters (\p{L}) and decimal digits (\p{Nd}) plus
-    # the three ASCII separators. Python's `re` has no \p{...}: use the Unicode database.
-    if char in _NAME_SEPARATORS:
-        return True
+_MARK_CATEGORIES = frozenset(("Mn", "Mc"))
+
+
+def _is_letter_or_digit(char: str) -> bool:
     category = unicodedata.category(char)
     return category.startswith("L") or category == "Nd"
+
+
+def _is_name_char(char: str) -> bool:
+    # STXT-SPEC sections 4.2 / 4.3: Unicode letters (\p{L}), decimal digits (\p{Nd}) and
+    # combining marks (\p{Mn}, \p{Mc}) plus the three ASCII separators. Python's `re` has no
+    # \p{...}: use the Unicode database.
+    if char in _NAME_SEPARATORS:
+        return True
+    return _is_letter_or_digit(char) or unicodedata.category(char) in _MARK_CATEGORIES
 
 
 def is_valid_node_name(name: Optional[str]) -> bool:
@@ -38,8 +46,9 @@ def is_valid_node_name(name: Optional[str]) -> bool:
     nfc_name = normalize_nfc(compact_spaces(name))
     if not nfc_name or not all(_is_name_char(c) for c in nfc_name):
         return False
-    # A string made only of separators (for example "___") has no logical name.
-    return not is_empty(normalize_chars(nfc_name))
+    # At least one letter or digit (4.2): a string made only of separators ("___") or only
+    # of combining marks has no logical name.
+    return any(_is_letter_or_digit(c) for c in nfc_name)
 
 
 def validate_namespace_format(namespace: Optional[str], line_number: int) -> None:
