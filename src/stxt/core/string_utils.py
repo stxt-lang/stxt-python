@@ -25,7 +25,7 @@ def normalize_chars(text: Optional[str]) -> str:
 
     Trim, NFC, lower case, every run of separators (``-``, ``_``, spaces) becomes a single
     ``-``, and leading/trailing ``-`` are removed. Diacritics and non-Latin letters are kept:
-    ``"Año" == "año"`` but ``"Año" != "Ano"``.
+    ``"Caña" == "caña"`` but ``"Caña" != "Cana"``.
 
     May return the empty string (e.g. for ``"___"``): the caller treats that as an error.
     """
