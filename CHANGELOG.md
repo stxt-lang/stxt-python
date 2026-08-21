@@ -3,11 +3,11 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
-## 1.0.0 - Unreleased
+## 0.11.0 - 2026-08-21
 
-The first stable release. The language (the five specifications, `SPEC_VERSION = "1.0"`), the
-canonical tree and the error codes are frozen for the whole 1.x line, and so is the public API
-of this package. Same scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 1.0.0.
+The preview of 1.0: everything 1.0 will ship, published first as a 0.x so that the consumers can
+move to it and anything left can still be fixed. The public API is the one 1.0 will freeze for
+the whole 1.x line. Same scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.11.0.
 
 ### Removed
 
@@ -21,6 +21,13 @@ of this package. Same scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 1.0.0.
 
 - `Type` and `TypeRegistry` are exported from the package root (they were only in
   `stxt.schema`).
+
+### Fixed
+
+- `LineIndent.indent_length` of a text line of a block was the index of the last indentation
+  character, one less than the number of characters the indentation took (the comment and node
+  cases were right). Fixed in the pseudocode and in the three ports at once, and the field is
+  **renamed `content_start`** (the index where the content starts).
 
 ### Tests
 

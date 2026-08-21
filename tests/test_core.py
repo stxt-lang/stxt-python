@@ -358,9 +358,12 @@ def test_observers_see_the_streaming_events_with_the_parent_already_attached():
 def test_parse_line_splits_indentation_and_content():
     li = parse_line("\t\tName: value", False, 1, 1)
     assert isinstance(li, LineIndent)
-    assert (li.indent_level, li.line_without_indent, li.is_comment, li.is_block, li.indent_length) == (2, "Name: value", False, False, 2)
+    assert (li.indent_level, li.line_without_indent, li.is_comment, li.is_block, li.content_start) == (2, "Name: value", False, False, 2)
     comment = parse_line("\t# hi", False, 0, 1)
     assert comment.is_comment and comment.line_without_indent == " hi"
+    assert comment.content_start == 1
+    block = parse_line("\t\t  text ", True, 1, 1)
+    assert (block.is_block, block.line_without_indent, block.content_start) == (True, "  text", 2)
 
 
 # ---------------------------------------------------------------- blanks (4)

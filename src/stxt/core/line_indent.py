@@ -19,18 +19,18 @@ class LineIndent:
         line_without_indent: content with the indentation already removed.
         is_comment: True if the line is a comment (``#``).
         is_block: True if the line is a text line of an open BLOCK node (``>>``).
-        indent_length: number of characters the indentation took up.
+        content_start: index of the first character of the content, i.e. the number of characters the indentation took up.
     """
 
-    __slots__ = ("indent_level", "line_without_indent", "is_comment", "is_block", "indent_length")
+    __slots__ = ("indent_level", "line_without_indent", "is_comment", "is_block", "content_start")
 
     def __init__(self, indent_level: int, line_without_indent: str, is_comment: bool,
-                 is_block: bool, indent_length: int) -> None:
+                 is_block: bool, content_start: int) -> None:
         self.indent_level = indent_level
         self.line_without_indent = line_without_indent
         self.is_comment = is_comment
         self.is_block = is_block
-        self.indent_length = indent_length
+        self.content_start = content_start
 
     def is_empty(self) -> bool:
         """True if the line has no content beyond blanks (space/tab only, STXT-SPEC section 4)."""
@@ -38,7 +38,7 @@ class LineIndent:
 
     def __repr__(self) -> str:
         return (f"LineIndent(level={self.indent_level}, content={self.line_without_indent!r}, "
-                f"comment={self.is_comment}, block={self.is_block}, indent_length={self.indent_length})")
+                f"comment={self.is_comment}, block={self.is_block}, content_start={self.content_start})")
 
 
 def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int) -> LineIndent:
@@ -110,7 +110,9 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
             if saw_space and saw_tab and len(text) > 0:
                 raise ParseException(num_line, "INDENTATION_MIXED", "Mixed tabs and spaces in indentation")
 
-            return LineIndent(level, text, False, True, pointer)
+            # pointer is the index of the indentation character that crossed the block
+            # level; the indentation took pointer + 1 characters
+            return LineIndent(level, text, False, True, pointer + 1)
 
         pointer += 1
 
