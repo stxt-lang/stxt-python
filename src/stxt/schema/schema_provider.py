@@ -49,7 +49,7 @@ class SchemaProviderMemory(SchemaProvider):
 
         Raises:
             ParseException: if the document does not parse.
-            ValidationException: the first meta-schema error, or ``INVALID_SCHEMA``.
+            ValidationException: the first meta-schema error, or ``SCHEMA_MULTIPLE_ROOTS``.
         """
         from ..core.parser import Parser
         from .schema_parser import transform_node_to_schema
@@ -57,7 +57,7 @@ class SchemaProviderMemory(SchemaProvider):
 
         nodes = Parser().parse(text)
         if len(nodes) != 1:
-            raise ValidationException(0, "INVALID_SCHEMA", f"There are {len(nodes)}, and expected is 1")
+            raise ValidationException(0, "SCHEMA_MULTIPLE_ROOTS", f"There are {len(nodes)} root nodes, and expected is 1")
         node = nodes[0]
 
         # The document must validate against the meta-schema (@stxt.schema)

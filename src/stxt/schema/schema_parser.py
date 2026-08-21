@@ -8,7 +8,9 @@ from typing import Optional
 from ..core.name_namespace import parse_name_namespace
 from ..core.node import InlineNode, Node
 from ..core.platform import is_integer, parse_integer
-from ..exceptions import RuntimeException, ValidationException
+from ..core.string_utils import is_empty, lower_case
+from ..core.validations import NAMESPACE_FORMAT
+from ..exceptions import ValidationException
 from .child_definition import ChildDefinition
 from .node_definition import NodeDefinition
 from .schema import SCHEMA_NAMESPACE, Schema
@@ -19,7 +21,7 @@ def _inline(node: Node) -> InlineNode:
     # The schema language is written with inline nodes: anything else is not a schema.
     if isinstance(node, InlineNode):
         return node
-    raise ValidationException(node.get_line(), "INVALID_SCHEMA",
+    raise ValidationException(node.get_line(), "SCHEMA_NODE_NOT_INLINE",
                               f"Node '{node.get_name()}' must be inline in a schema")
 
 
@@ -27,24 +29,33 @@ def transform_node_to_schema(node: Node) -> Schema:
     """Turns the root node of a schema document (``Schema (@stxt.schema): <ns>``) into a Schema.
 
     Raises:
-        ValidationException: ``NOT_STXT_SCHEMA``, ``INVALID_SCHEMA``, ``CHILD_NOT_DEFINED`` and
+        ValidationException: ``SCHEMA_ROOT_NOT_VALID``, ``SCHEMA_NAMESPACE_EMPTY``, ``SCHEMA_NODE_NOT_INLINE``,
+            ``CHILD_NOT_DEFINED`` and
             the errors of the definitions themselves.
     """
     node_name = node.get_canonical_name()
     namespace_schema = node.get_namespace()
 
     if node_name != "schema" or namespace_schema != SCHEMA_NAMESPACE:
-        raise ValidationException(node.get_line(), "NOT_STXT_SCHEMA",
+        raise ValidationException(node.get_line(), "SCHEMA_ROOT_NOT_VALID",
                                   f"Expected schema({SCHEMA_NAMESPACE}) but got {node_name}({namespace_schema})")
     root = _inline(node)
+
+    # The inline value of the root Schema node is the target namespace: it must be present
+    # and have a valid namespace format (STXT-SCHEMA-SPEC 13.1)
+    target = lower_case(root.get_value())
+    if is_empty(target):
+        raise ValidationException(root.get_line(), "SCHEMA_NAMESPACE_EMPTY", "Schema namespace is empty")
+    if NAMESPACE_FORMAT.fullmatch(target) is None:
+        raise ValidationException(root.get_line(), "SCHEMA_ROOT_NOT_VALID",
+                                  f"Schema namespace not valid: {root.get_value()}")
 
     description: Optional[str] = None
     description_node = root.get_child("description")
     if description_node is not None:
         description = description_node.get_text()
 
-    # The inline value of the root Schema node is the target namespace
-    schema = Schema(root.get_value(), root.get_line(), description)
+    schema = Schema(target, root.get_line(), description)
 
     all_names: list[str] = []
     for n in root.get_children_by_name("node"):
@@ -96,10 +107,11 @@ def _create_node_definition(node: Node, namespace: str) -> NodeDefinition:
     values = n.get_children_by_name("values")
     if values:
         if type_ != "ENUM":
-            raise ValidationException(n.get_line(), "VALUES_ONLY_SUPPORTED_BY_ENUM",
+            raise ValidationException(n.get_line(), "VALUES_NOT_ALLOWED_FOR_TYPE",
                                       f"Values only supported for type ENUM, not for type {type_}")
         if len(values) > 1:
-            raise RuntimeException("INVALID_SIZE_VALUES", f"Unexpected number of values: {len(values)}")
+            raise ValidationException(values[1].get_line(), "VALUES_DUPLICATED",
+                                      f"Node {name} declares Values {len(values)} times, and expected is 1")
 
         values = _inline(values[0]).get_children_by_name("value")
         for value in values:
@@ -107,7 +119,7 @@ def _create_node_definition(node: Node, namespace: str) -> NodeDefinition:
 
     # An ENUM must declare at least one value
     if type_ == "ENUM" and len(values) == 0:
-        raise ValidationException(n.get_line(), "VALUES_EMPTY_FOR_ENUM", "ENUM Type must include values")
+        raise ValidationException(n.get_line(), "VALUES_REQUIRED", "ENUM Type must include values")
 
     return result
 
@@ -135,7 +147,7 @@ def _get_integer(node: InlineNode, child_name: str) -> Optional[int]:
     if n is None:
         return None
     if not is_integer(n.get_text()):
-        raise ValidationException(node.get_line(), "INVALID_INTEGER", "Integer not valid: " + n.get_text())
+        raise ValidationException(node.get_line(), "CARDINALITY_NOT_VALID", "Integer not valid: " + n.get_text())
     return parse_integer(n.get_text())
 
 

@@ -164,7 +164,7 @@ class Parser:
                 except ParseException as pe:
                     result.add_error(pe)
                 except Exception as e:  # noqa: BLE001 - a validator that throws does not abort the parse
-                    result.add_error(ParseException(completed.get_line(), "VALIDATION_ERROR", str(e)))
+                    result.add_error(ParseException(completed.get_line(), "UNEXPECTED_ERROR", str(e)))
 
             for observer in self._observers:
                 observer.on_finish(completed)
@@ -176,7 +176,7 @@ def create_node(line_indent: LineIndent, line_number: int) -> Node:
     inheritance from the parent is resolved by the node itself once attached.
 
     Raises:
-        ParseException: ``INVALID_LINE``, ``INLINE_VALUE_NOT_VALID``, ``INVALID_NAMESPACE``
+        ParseException: ``INVALID_LINE``, ``BLOCK_VALUE_NOT_ALLOWED``, ``INVALID_NAMESPACE``
             or ``INVALID_NODE_NAME``.
     """
     line = line_indent.line_without_indent
@@ -204,7 +204,7 @@ def create_node(line_indent: LineIndent, line_number: int) -> Node:
 
     # A '>>' node cannot carry significant inline content on the same line (11.4)
     if is_text_node and trim(value) != "":
-        raise ParseException(line_number, "INLINE_VALUE_NOT_VALID", "Line not valid: " + line)
+        raise ParseException(line_number, "BLOCK_VALUE_NOT_ALLOWED", "Line not valid: " + line)
 
     # The namespace the line declares, if any ("" when it inherits)
     nn = parse_name_namespace(name, None, line_number, line)

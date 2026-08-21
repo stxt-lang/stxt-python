@@ -87,8 +87,8 @@ SCHEMA = """Schema (@stxt.schema): com.example.blog
 DOCS = [
     ("Post (com.example.blog):\n\tTitle: Hi\n\tBody >>\n\t\tx\n\tComment:\n\t\tAuthor: a\n\t\tText: t\n\t\tComment:\n\t\t\tAuthor: b\n\t\t\tText: u\n", []),
     ("Post (com.example.blog):\n\tTitle: Hi\n\tTags:\n\t\tTag: tech\n\t\tTag: rock\n\tBody >>\n", ["INVALID_VALUE"]),
-    ("Post (com.example.blog):\n\tBody: inline\n", ["BLOCK_FORM_REQUIRED", "INVALID_NUMBER"]),
-    ("Post (com.example.blog):\n\tTitle: a\n\tTitle: b\n\tBody >>\n\tExtra: no\n", ["CHILD_NOT_DECLARED", "NODE_NOT_EXIST_IN_SCHEMA", "INVALID_NUMBER", "INVALID_NUMBER", "INVALID_NUMBER"]),
+    ("Post (com.example.blog):\n\tBody: inline\n", ["BLOCK_FORM_REQUIRED", "TOO_FEW_CHILDREN"]),
+    ("Post (com.example.blog):\n\tTitle: a\n\tTitle: b\n\tBody >>\n\tExtra: no\n", ["CHILD_NOT_DECLARED", "NODE_NOT_DEFINED_IN_SCHEMA", "TOO_MANY_CHILDREN", "TOO_MANY_CHILDREN", "TOO_MANY_CHILDREN"]),
 ]
 
 
@@ -147,27 +147,27 @@ def _template_error(structure_lines, description_lines=None):
 
 
 @pytest.mark.parametrize("lines,code", [
-    (["Root >>"], "INVALID_CHILD_LINE"),
-    (["Root:", "\tChild >>"], "INVALID_CHILD_LINE"),
-    (["Root: (x)"], "INVALID_CHILD_COUNT"),
+    (["Root >>"], "STRUCTURE_LINE_NOT_VALID"),
+    (["Root:", "\tChild >>"], "STRUCTURE_LINE_NOT_VALID"),
+    (["Root: (x)"], "CARDINALITY_NOT_VALID"),
     (["Root: (2,1)"], "MIN_GREATER_THAN_MAX"),
-    (["Root: (1,2,3)"], "INVALID_CHILD_COUNT"),
-    (["Root: (-1)"], "INVALID_CHILD_COUNT"),
+    (["Root: (1,2,3)"], "CARDINALITY_NOT_VALID"),
+    (["Root: (-1)"], "CARDINALITY_NOT_VALID"),
     (["Root: FOO"], "TYPE_NOT_VALID"),
-    (["Root: ENUM"], "VALUES_EMPTY_FOR_ENUM"),
-    (["Root: ENUM []"], "VALUES_EMPTY_FOR_ENUM"),
+    (["Root: ENUM"], "VALUES_REQUIRED"),
+    (["Root: ENUM []"], "VALUES_REQUIRED"),
     (["Root: ENUM [a, a]"], "VALUE_DUPLICATED"),
-    (["Root: TEXT [a, b]"], "VALUES_ONLY_SUPPORTED_BY_ENUM"),
+    (["Root: TEXT [a, b]"], "VALUES_NOT_ALLOWED_FOR_TYPE"),
     (["Root: TEXT", "\tChild:"], "CHILDREN_NOT_ALLOWED_FOR_TYPE"),
-    (["Root:", "\tA:", "Root:"], "NODE_DEFINED_MULTIPLE_TIMES"),
-    (["Root:", "\tA:", "\tA:"], "CHILD_DEF_ALREADY_DEFINED"),
-    (["Root:", "\tA:", "\tB:", "\t\tA: @Other"], "NODE_REFERENCE_NOT_VALID"),
+    (["Root:", "\tA:", "Root:"], "REFERENCE_REQUIRED"),
+    (["Root:", "\tA:", "\tA:"], "CHILD_DUPLICATED"),
+    (["Root:", "\tA:", "\tB:", "\t\tA: @Other"], "REFERENCE_NAME_NOT_VALID"),
     (["Root:", "\tA:", "\tB:", "\t\tA: @A TEXT"], "REFERENCE_WITH_TYPE_NOT_ALLOWED"),
     (["Root:", "\tA:", "\tB:", "\t\tA: @A [x]"], "VALUES_NOT_ALLOWED_IN_REFERENCE"),
     (["Root:", "\tA:", "\tB:", "\t\tA: @A", "\t\t\tC:"], "CHILDREN_NOT_ALLOWED_IN_REFERENCE"),
     (["Root:", "\tC: @C"], "REFERENCE_NOT_FOUND"),
     (["Root:", "\tA: @Nowhere"], "REFERENCE_NOT_FOUND"),
-    (["Root:", "\tExt (com.example.o): TEXT"], "TYPE_DEFINITION_NOT_ALLOWED"),
+    (["Root:", "\tExt (com.example.o): TEXT"], "TYPE_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE"),
     (["Root:", "\tExt (com.example.o): [a]"], "VALUES_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE"),
     (["Root:", "\tExt (com.example.o):", "\t\tB:"], "CHILDREN_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE"),
 ])
@@ -176,10 +176,10 @@ def test_template_structure_errors(lines, code):
 
 
 @pytest.mark.parametrize("description,code", [
-    (["Missing: x"], "NODE_NOT_FOUND"),
-    (["Root: x", "Root: y"], "DESCRIPTION_ALREADY_DEFINED"),
-    (["Root (com.example.o): x"], "EXTERNAL_DESCRIPTION_NOT_ALLOWED"),
-    (["Root: x", "\tChild: y"], "CHILDREN_DESCRIPTION_NOT_ALLOWED"),
+    (["Missing: x"], "DESCRIPTION_NODE_NOT_FOUND"),
+    (["Root: x", "Root: y"], "DESCRIPTION_DUPLICATED"),
+    (["Root (com.example.o): x"], "DESCRIPTION_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE"),
+    (["Root: x", "\tChild: y"], "DESCRIPTION_CHILDREN_NOT_ALLOWED"),
 ])
 def test_template_description_errors(description, code):
     assert _template_error(["Root:"], description).code == code
@@ -195,7 +195,7 @@ def test_errors_inside_structure_point_at_the_line_of_the_original_document():
 def test_a_template_without_structure_is_rejected():
     with pytest.raises(ValidationException) as info:
         TemplateSchemaProviderMemory().add_template("Template (@stxt.template): com.example.t\n\tDescription: x\n")
-    assert info.value.code in ("TEMPLATE_STRUCTURE_REQUIRED", "INVALID_NUMBER")
+    assert info.value.code in ("TEMPLATE_STRUCTURE_REQUIRED", "TOO_FEW_CHILDREN")
 
 
 def test_open_ancestor_recursion_and_references_to_closed_definitions():
@@ -230,3 +230,27 @@ def test_writer_keeps_a_template_readable():
     # The block content keeps its own (relative) indentation literally: tabs inside stay tabs
     assert "    Structure >>\n        Post (com.example.blog):\n        \tTitle: (1) TEXT\n" in written
     assert _compile(written).get_nodes().keys() == _compile(TEMPLATE).get_nodes().keys()
+
+
+@pytest.mark.parametrize("text,code", [
+    ("Schema (@stxt.template): com.example.t\n\tStructure >>\n\t\tRoot:\n", "TEMPLATE_ROOT_NOT_VALID"),
+    ("Template (com.example.t): com.example.t\n\tStructure >>\n\t\tRoot:\n", "TEMPLATE_ROOT_NOT_VALID"),
+    ("Template (@stxt.template): nodots\n\tStructure >>\n\t\tRoot:\n", "TEMPLATE_ROOT_NOT_VALID"),
+    ("Template (@stxt.template):\n\tStructure >>\n\t\tRoot:\n", "TEMPLATE_NAMESPACE_EMPTY"),
+])
+def test_template_transform_root_errors(text, code):
+    # The meta-template catches a wrong root first in a provider: the transform reports it
+    with pytest.raises(ValidationException) as info:
+        transform_template_node_to_schema(Parser().parse(text)[0])
+    assert (info.value.code, info.value.line) == (code, 1), repr(info.value)
+
+
+@pytest.mark.parametrize("text,code", [
+    ("Template (@stxt.template): nodots\n\tStructure >>\n\t\tRoot:\n", "TEMPLATE_ROOT_NOT_VALID"),
+    ("Template (@stxt.template):\n\tStructure >>\n\t\tRoot:\n", "TEMPLATE_NAMESPACE_EMPTY"),
+    ("Template (@stxt.template): com.example.t\n\tStructure >>\n\t\tRoot:\n" * 2, "TEMPLATE_MULTIPLE_ROOTS"),
+])
+def test_template_root_errors(text, code):
+    with pytest.raises(ValidationException) as info:
+        TemplateSchemaProviderMemory().add_template(text)
+    assert info.value.code == code, repr(info.value)

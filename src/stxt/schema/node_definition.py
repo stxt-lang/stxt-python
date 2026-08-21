@@ -50,10 +50,10 @@ class NodeDefinition:
         return self._children
 
     def add_child_definition(self, child_definition: ChildDefinition) -> None:
-        """Raises ``CHILD_DEF_ALREADY_DEFINED`` for two equivalent Child entries."""
+        """Raises ``CHILD_DUPLICATED`` for two equivalent Child entries."""
         qname = child_definition.get_qualified_name()
         if qname in self._children:
-            raise ValidationException(0, "CHILD_DEF_ALREADY_DEFINED",
+            raise ValidationException(0, "CHILD_DUPLICATED",
                                       "Exists a previous node definition with: " + qname)
         self._children[qname] = child_definition
 

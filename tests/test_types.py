@@ -3,7 +3,7 @@ through SchemaValidator over a schema that declares one node per type."""
 
 import pytest
 
-from stxt import Parser, SchemaProviderMemory, SchemaValidator
+from stxt import Parser, SchemaProviderMemory, SchemaValidator, ValidationException, transform_node_to_schema
 
 TYPES = ["INLINE", "BLOCK", "TEXT", "MARKDOWN", "BOOLEAN", "URL", "INTEGER", "NATURAL", "NUMBER", "DATE",
          "TIME", "TIMESTAMP", "UUID", "EMAIL", "HEXADECIMAL", "BINARY", "BASE64", "GROUP", "ENUM"]
@@ -45,13 +45,13 @@ def test_inline_accepts_value_and_children_but_not_block():
     assert codes(inline("INLINE", "x")) == []
     assert codes(inline("INLINE", "") ) == []
     assert codes("INLINE (com.example.types): x\n\tAny: y\n") == []
-    assert codes(block("INLINE", "x")) == ["NOT_ALLOWED_TEXT"]
+    assert codes(block("INLINE", "x")) == ["BLOCK_FORM_NOT_ALLOWED"]
 
 
 def test_group_accepts_only_children():
     assert codes("GROUP (com.example.types):\n\tAny: y\n") == []
-    assert codes(inline("GROUP", "value")) == ["INVALID_VALUE"]
-    assert codes(block("GROUP", "x")) == ["INVALID_VALUE"]
+    assert codes(inline("GROUP", "value")) == ["VALUE_NOT_ALLOWED"]
+    assert codes(block("GROUP", "x")) == ["VALUE_NOT_ALLOWED"]
 
 
 def test_block_requires_the_block_form():
@@ -63,14 +63,14 @@ def test_block_requires_the_block_form():
 def test_text_and_markdown_accept_both_forms_but_no_children(type_):
     assert codes(inline(type_, "any # text >>")) == []
     assert codes(block(type_, "line", "", "more")) == []
-    assert codes(f"{type_} (com.example.types): x\n\tAny: y\n") == ["NOT_ALLOWED_CHILDREN_TEXT", "CHILD_NOT_DECLARED"]
+    assert codes(f"{type_} (com.example.types): x\n\tAny: y\n") == ["CHILDREN_NOT_ALLOWED", "CHILD_NOT_DECLARED"]
 
 
 def test_enum_is_case_sensitive_and_inline_only():
     assert codes(inline("ENUM", "red")) == []
     assert codes(inline("ENUM", "Red")) == ["INVALID_VALUE"]
     assert codes(inline("ENUM", "blue")) == ["INVALID_VALUE"]
-    assert codes(block("ENUM", "red")) == ["NOT_ALLOWED_TEXT"]
+    assert codes(block("ENUM", "red")) == ["BLOCK_FORM_NOT_ALLOWED"]
 
 
 # ---------------------------------------------------------------- regex types
@@ -104,7 +104,7 @@ def test_regex_types(type_, good, bad):
         assert codes(inline(type_, value)) == [], f"{type_} should accept {value!r}"
     for value in bad:
         assert codes(inline(type_, value)) == ["INVALID_VALUE"], f"{type_} should reject {value!r}"
-    assert codes(block(type_, good[0])) == ["NOT_ALLOWED_TEXT"]
+    assert codes(block(type_, good[0])) == ["BLOCK_FORM_NOT_ALLOWED"]
 
 
 # ---------------------------------------------------------------- specific types
@@ -122,7 +122,7 @@ def test_url_follows_the_grammar_of_the_spec():
         assert codes(inline("URL", value)) == [], value
     for value in bad:
         assert codes(inline("URL", value)) == ["INVALID_VALUE"], value
-    assert codes(block("URL", "https://stxt.dev")) == ["NOT_ALLOWED_TEXT"]
+    assert codes(block("URL", "https://stxt.dev")) == ["BLOCK_FORM_NOT_ALLOWED"]
 
 
 def test_binary_types_accept_inline_and_block_and_ignore_line_edges():
@@ -169,30 +169,76 @@ def test_closed_content_model_and_cardinalities():
         return [(e.code, e.line) for e in SchemaValidator(provider, True).validate(Parser().parse(text)[0])]
 
     assert card_codes("Doc (com.example.card):\n\tTitle: t\n\tTag: a\n\tTag: b\n") == []
-    assert card_codes("Doc (com.example.card):\n") == [("INVALID_NUMBER", 1)]
+    assert card_codes("Doc (com.example.card):\n") == [("TOO_FEW_CHILDREN", 1)]
     assert card_codes("Doc (com.example.card):\n\tTitle: t\n\tTag: a\n\tTag: b\n\tTag: c\n") == \
-        [("INVALID_NUMBER", 1), ("INVALID_NUMBER", 3), ("INVALID_NUMBER", 4), ("INVALID_NUMBER", 5)]
-    assert card_codes("Doc (com.example.card):\n\tTitle: t\n\tOther: x\n") == [("CHILD_NOT_DECLARED", 3), ("NODE_NOT_EXIST_IN_SCHEMA", 3)]
-    assert card_codes("Unknown (com.example.card):\n") == [("NODE_NOT_EXIST_IN_SCHEMA", 1)]
+        [("TOO_MANY_CHILDREN", 1), ("TOO_MANY_CHILDREN", 3), ("TOO_MANY_CHILDREN", 4), ("TOO_MANY_CHILDREN", 5)]
+    assert card_codes("Doc (com.example.card):\n\tTitle: t\n\tOther: x\n") == [("CHILD_NOT_DECLARED", 3), ("NODE_NOT_DEFINED_IN_SCHEMA", 3)]
+    assert card_codes("Unknown (com.example.card):\n") == [("NODE_NOT_DEFINED_IN_SCHEMA", 1)]
     # A cross-namespace child is declared here and validated by its own schema (missing => finding)
     assert card_codes("Doc (com.example.card):\n\tTitle: t\n\tRef (com.example.other): x\n") == [("SCHEMA_NOT_FOUND", 3)]
 
 
 @pytest.mark.parametrize("text,code", [
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: TEXT\n\t\tChildren:\n\t\t\tChild: A\n", "CHILDREN_NOT_ALLOWED_FOR_TYPE"),
-    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: TEXT\n\t\tValues:\n\t\t\tValue: v\n", "VALUES_ONLY_SUPPORTED_BY_ENUM"),
-    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n", "VALUES_EMPTY_FOR_ENUM"),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: TEXT\n\t\tValues:\n\t\t\tValue: v\n", "VALUES_NOT_ALLOWED_FOR_TYPE"),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n", "VALUES_REQUIRED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n\t\tValues:\n\t\t\tValue: v\n\t\t\tValue: v\n", "VALUE_DUPLICATED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\t\tMin: 2\n\t\t\t\tMax: 1\n\tNode: B\n", "MIN_GREATER_THAN_MAX"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: Missing\n", "CHILD_NOT_DEFINED"),
-    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\tNode: a\n", "NODE_DEF_ALREADY_DEFINED"),
-    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\tChild: b\n\tNode: B\n", "CHILD_DEF_ALREADY_DEFINED"),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\tNode: a\n", "NODE_DUPLICATED"),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\tChild: b\n\tNode: B\n", "CHILD_DUPLICATED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: FOO\n", "INVALID_VALUE"),
-    ("Schema (@stxt.schema): nodots\n\tNode: A\n", "INVALID_NAMESPACE"),
-    ("Doc (@stxt.schema): com.example.x\n", "NODE_NOT_EXIST_IN_SCHEMA"),
+    ("Schema (@stxt.schema): nodots\n\tNode: A\n", "SCHEMA_ROOT_NOT_VALID"),
+    ("Schema (@stxt.schema):\n\tNode: A\n", "SCHEMA_NAMESPACE_EMPTY"),
+    ("Doc (@stxt.schema): com.example.x\n", "NODE_NOT_DEFINED_IN_SCHEMA"),
     ("Schema (com.example.x): com.example.x\n\tNode: A\n", "SCHEMA_NOT_FOUND"),
 ])
 def test_schema_errors(text, code):
     with pytest.raises(Exception) as info:
         SchemaProviderMemory().add_schema(text)
     assert getattr(info.value, "code", None) == code, repr(info.value)
+
+
+GROUP_SCHEMA = """Schema (@stxt.schema): com.example.group
+	Node: Doc
+		Children:
+			Child: Meta
+	Node: Meta
+		Type: GROUP
+"""
+
+
+def test_a_value_on_a_group_node_is_value_not_allowed():
+    provider = SchemaProviderMemory()
+    provider.add_schema(GROUP_SCHEMA)
+    errors = SchemaValidator(provider, True).validate(Parser().parse("Doc (com.example.group):\n\tMeta: x\n")[0])
+    assert [(e.code, e.line) for e in errors] == [("VALUE_NOT_ALLOWED", 2)]
+    errors = SchemaValidator(provider, True).validate(Parser().parse("Doc (com.example.group):\n\tMeta >>\n\t\tx\n")[0])
+    assert [(e.code, e.line) for e in errors] == [("VALUE_NOT_ALLOWED", 2)]
+
+
+def test_two_values_nodes_are_values_duplicated_with_the_line_of_the_second():
+    text = ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n"
+            "\t\tValues:\n\t\t\tValue: a\n\t\tValues:\n\t\t\tValue: b\n")
+    # A provider reports it first as TOO_MANY_CHILDREN of the meta-schema (Values Max: 1)
+    with pytest.raises(ValidationException) as info:
+        SchemaProviderMemory().add_schema(text)
+    assert info.value.code == "TOO_MANY_CHILDREN"
+    # The transform itself reports VALUES_DUPLICATED, pointing at the second Values node
+    with pytest.raises(ValidationException) as info:
+        transform_node_to_schema(Parser().parse(text)[0])
+    assert (info.value.code, info.value.line) == ("VALUES_DUPLICATED", 6)
+
+
+@pytest.mark.parametrize("text,code,line", [
+    ("Doc (@stxt.schema): com.example.x\n", "SCHEMA_ROOT_NOT_VALID", 1),
+    ("Schema (com.example.x): com.example.x\n", "SCHEMA_ROOT_NOT_VALID", 1),
+    ("Schema (@stxt.schema): nodots\n", "SCHEMA_ROOT_NOT_VALID", 1),
+    ("Schema (@stxt.schema):\n", "SCHEMA_NAMESPACE_EMPTY", 1),
+    ("Schema (@stxt.schema): com.example.x\n\tNode >>\n\t\tA\n", "SCHEMA_NODE_NOT_INLINE", 2),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren >>\n", "SCHEMA_NODE_NOT_INLINE", 3),
+])
+def test_schema_transform_root_and_form_errors(text, code, line):
+    with pytest.raises(ValidationException) as info:
+        transform_node_to_schema(Parser().parse(text)[0])
+    assert (info.value.code, info.value.line) == (code, line), repr(info.value)

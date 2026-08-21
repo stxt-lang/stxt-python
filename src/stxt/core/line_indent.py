@@ -46,7 +46,7 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
 
     * 1 level = 1 TAB or ``TAB_SPACES`` spaces.
     * The indentation of a single line must be homogeneous (only tabs or only spaces);
-      mixing both is ``MIXED_INDENTATION``.
+      mixing both is ``INDENTATION_MIXED``.
     * Comment lines are validated like node lines (sections 9 and 11): homogeneous
       indentation, a multiple of ``TAB_SPACES`` when spaces, and a level of at most
       ``last_level + 1``. They produce no node and never move the hierarchy (the parser does
@@ -60,7 +60,7 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
         num_line: 1-based line number, for the errors.
 
     Raises:
-        ParseException: ``MIXED_INDENTATION``, ``INVALID_NUMBER_SPACES`` or
+        ParseException: ``INDENTATION_MIXED``, ``INDENTATION_SPACES_NOT_VALID`` or
             ``INDENTATION_LEVEL_NOT_VALID``.
     """
     level = 0
@@ -108,7 +108,7 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
             # The prefix covering the block level must be homogeneous (10.2 rule 1).
             # Empty lines are always preserved and exempt from the check (10.3).
             if saw_space and saw_tab and len(text) > 0:
-                raise ParseException(num_line, "MIXED_INDENTATION", "Mixed tabs and spaces in indentation")
+                raise ParseException(num_line, "INDENTATION_MIXED", "Mixed tabs and spaces in indentation")
 
             return LineIndent(level, text, False, True, pointer)
 
@@ -126,11 +126,11 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
 
     # Mixed tabs and spaces in the indentation of the same line (sections 8.1, 8.3)
     if saw_space and saw_tab:
-        raise ParseException(num_line, "MIXED_INDENTATION", "Mixed tabs and spaces in indentation")
+        raise ParseException(num_line, "INDENTATION_MIXED", "Mixed tabs and spaces in indentation")
 
     # Invalid indentation: spaces not a multiple of TAB_SPACES
     if spaces > 0:
-        raise ParseException(num_line, "INVALID_NUMBER_SPACES", f"There are {spaces} spaces before node")
+        raise ParseException(num_line, "INDENTATION_SPACES_NOT_VALID", f"There are {spaces} spaces before node")
 
     # Validate indentation level progression (no jumps, section 11.3). Comments included
     # (section 9): last_level is the level of the last NODE, a comment never becomes the reference.

@@ -51,7 +51,7 @@ def test_a_line_without_separator_is_invalid():
 
 
 def test_a_block_node_cannot_carry_inline_content():
-    assert _codes("Body >> text\n") == ["INLINE_VALUE_NOT_VALID"]
+    assert _codes("Body >> text\n") == ["BLOCK_VALUE_NOT_ALLOWED"]
 
 
 def test_the_first_separator_decides_the_form():
@@ -102,12 +102,12 @@ def test_tabs_and_four_spaces_are_both_one_level():
 
 
 def test_mixed_indentation_in_a_line_is_an_error():
-    assert _codes("A: x\n\t B: y\n") == ["MIXED_INDENTATION"]
-    assert _codes("A: x\n \tB: y\n") == ["MIXED_INDENTATION"]
+    assert _codes("A: x\n\t B: y\n") == ["INDENTATION_MIXED"]
+    assert _codes("A: x\n \tB: y\n") == ["INDENTATION_MIXED"]
 
 
 def test_spaces_not_multiple_of_four_are_an_error():
-    assert _codes("A: x\n  B: y\n") == ["INVALID_NUMBER_SPACES"]
+    assert _codes("A: x\n  B: y\n") == ["INDENTATION_SPACES_NOT_VALID"]
 
 
 def test_jumping_more_than_one_level_is_an_error():
@@ -156,8 +156,8 @@ def test_a_block_ends_at_a_line_of_its_own_level():
 
 def test_mixed_indentation_inside_a_block_line_is_an_error_but_not_for_empty_lines():
     # The prefix covering the block level must be homogeneous; what follows is content
-    assert _codes("A:\n\tT >>\n\t    x\n") == ["MIXED_INDENTATION"]
-    assert _codes("A:\n\tT >>\n \tx\n") == ["MIXED_INDENTATION"]
+    assert _codes("A:\n\tT >>\n\t    x\n") == ["INDENTATION_MIXED"]
+    assert _codes("A:\n\tT >>\n \tx\n") == ["INDENTATION_MIXED"]
     assert list(_first("T >>\n\t inside\n").get_text_lines()) == [" inside"]
     text = _first("A:\n\tT >>\n\t    \n\t\tok\n").get_children()[0]
     assert list(text.get_text_lines()) == ["", "ok"]
@@ -203,12 +203,12 @@ def _first_error(text):
 
 def test_a_comment_mixing_tabs_and_spaces_is_mixed_indentation():
     error = _first_error("A: x\n\t  # mixed\n\tB: y\n")
-    assert (error.code, error.line) == ("MIXED_INDENTATION", 2)
+    assert (error.code, error.line) == ("INDENTATION_MIXED", 2)
 
 
 def test_a_comment_with_spaces_not_multiple_of_four_is_invalid_number_spaces():
     error = _first_error("A: x\n  # two spaces\n\tB: y\n")
-    assert (error.code, error.line) == ("INVALID_NUMBER_SPACES", 2)
+    assert (error.code, error.line) == ("INDENTATION_SPACES_NOT_VALID", 2)
 
 
 def test_a_comment_jumping_more_than_one_level_is_indentation_level_not_valid():
@@ -308,7 +308,7 @@ def test_blanks_are_only_space_and_tab_so_an_nbsp_is_content():
 
 def test_a_line_holding_only_an_nbsp_is_not_empty():
     assert _codes(" \n") == ["INVALID_LINE"]
-    assert _codes("Block >> \n") == ["INLINE_VALUE_NOT_VALID"]
+    assert _codes("Block >> \n") == ["BLOCK_VALUE_NOT_ALLOWED"]
     assert _codes("Root: x\n \t\n\n") == []
 
 

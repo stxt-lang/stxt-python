@@ -15,12 +15,12 @@ from stxt import (
 )
 
 # Passes the parser and the transform, but Type: FOO violates the meta-schema ENUM
-INVALID_SCHEMA = "Schema (@stxt.schema): com.example.demo\n\tNode: Root\n\t\tType: FOO\n"
+SCHEMA_FAILING_META = "Schema (@stxt.schema): com.example.demo\n\tNode: Root\n\t\tType: FOO\n"
 VALID_SCHEMA = "Schema (@stxt.schema): com.example.demo\n\tNode: Root\n\t\tType: TEXT\n"
 
 # Parses fine and the transform ignores the extra child, but the meta-template's closed
 # content model does not declare "Foo" under Template
-INVALID_TEMPLATE = "Template (@stxt.template): com.example.demo\n\tStructure >>\n\t\tRoot:\n\tFoo: bar\n"
+TEMPLATE_FAILING_META = "Template (@stxt.template): com.example.demo\n\tStructure >>\n\t\tRoot:\n\tFoo: bar\n"
 VALID_TEMPLATE = "Template (@stxt.template): com.example.demo\n\tStructure >>\n\t\tRoot:\n"
 
 
@@ -28,7 +28,7 @@ class TestSchemaProviderMemory:
     def test_throws_the_first_validation_error_for_an_invalid_schema_and_does_not_register_it(self):
         provider = SchemaProviderMemory()
         with pytest.raises(ValidationException):
-            provider.add_schema(INVALID_SCHEMA)
+            provider.add_schema(SCHEMA_FAILING_META)
         assert provider.get_all_schemas() == []
 
     def test_still_registers_a_valid_schema(self):
@@ -55,14 +55,14 @@ class TestSchemaProviderMemory:
     def test_rejects_two_documents_in_one_text(self):
         with pytest.raises(ValidationException) as info:
             SchemaProviderMemory().add_schema(VALID_SCHEMA + VALID_SCHEMA)
-        assert info.value.code == "INVALID_SCHEMA"
+        assert info.value.code == "SCHEMA_MULTIPLE_ROOTS"
 
 
 class TestTemplateSchemaProviderMemory:
     def test_throws_the_first_validation_error_for_an_invalid_template_and_does_not_register_it(self):
         provider = TemplateSchemaProviderMemory()
         with pytest.raises(ValidationException):
-            provider.add_template(INVALID_TEMPLATE)
+            provider.add_template(TEMPLATE_FAILING_META)
         assert provider.get_all_schemas() == []
 
     def test_still_registers_a_valid_template(self):
@@ -75,7 +75,7 @@ class TestTemplateSchemaProviderMemory:
         with pytest.raises(ValidationException) as info:
             TemplateSchemaProviderMemory().add_template(
                 "Template (@stxt.template): com.example.demo\n\tStructure >>\n\t\tRoot >>\n")
-        assert info.value.code == "INVALID_CHILD_LINE"
+        assert info.value.code == "STRUCTURE_LINE_NOT_VALID"
 
 
 class TestSchemaProviderContract:
@@ -132,7 +132,7 @@ class TestUnifiedSchemaProvider:
     def test_an_invalid_definition_is_not_loaded(self):
         provider = UnifiedSchemaProvider()
         with pytest.raises(ValidationException):
-            provider.add_file(INVALID_SCHEMA)
+            provider.add_file(SCHEMA_FAILING_META)
         with pytest.raises(ValidationException):
-            provider.add_file(INVALID_TEMPLATE)
+            provider.add_file(TEMPLATE_FAILING_META)
         assert provider.get_all_schemas() == []

@@ -11,10 +11,9 @@ from ..exceptions import ValidationException
 from ..schema.schema import Schema
 from ..schema.schema_provider import SchemaProvider, SchemaProviderMemory
 from ..schema.schema_validator import SchemaValidator
-from .template_parser import transform_template_node_to_schema
+from .template_parser import TEMPLATE_NAMESPACE, transform_template_node_to_schema
 
 #: Namespace of the template language itself.
-TEMPLATE_NAMESPACE = "@stxt.template"
 
 # The meta-template of the template language itself, embedded verbatim: STXT-TEMPLATE-SPEC 16.
 META_TEXT = """Template (@stxt.template): @stxt.template
@@ -65,11 +64,11 @@ class TemplateSchemaProviderMemory(SchemaProviderMemory):
 
         Raises:
             ParseException: if the document does not parse.
-            ValidationException: the first meta-template error, or ``INVALID_SCHEMA``.
+            ValidationException: the first meta-template error, or ``TEMPLATE_MULTIPLE_ROOTS``.
         """
         nodes = Parser().parse(template)
         if len(nodes) != 1:
-            raise ValidationException(0, "INVALID_SCHEMA", f"There are {len(nodes)}, and expected is 1")
+            raise ValidationException(0, "TEMPLATE_MULTIPLE_ROOTS", f"There are {len(nodes)} root nodes, and expected is 1")
         node = nodes[0]
 
         # The document must validate against the meta-template (@stxt.template)
@@ -79,7 +78,7 @@ class TemplateSchemaProviderMemory(SchemaProviderMemory):
 
         schema = transform_template_node_to_schema(node)
         if is_empty(schema.get_namespace()):
-            raise ValidationException(0, "INVALID_SCHEMA", "Schema namespace is empty")
+            raise ValidationException(node.get_line(), "TEMPLATE_NAMESPACE_EMPTY", "Template namespace is empty")
 
         self._schemas[schema.get_namespace()] = schema
 

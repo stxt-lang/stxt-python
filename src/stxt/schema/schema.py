@@ -43,10 +43,10 @@ class Schema:
         return self._nodes.get(normalize_chars(name))
 
     def add_node_definition(self, node_definition: NodeDefinition) -> None:
-        """Raises ``NODE_DEF_ALREADY_DEFINED`` when two Node definitions share a canonical name."""
+        """Raises ``NODE_DUPLICATED`` when two Node definitions share a canonical name."""
         qname = node_definition.get_canonical_name()
         if qname in self._nodes:
-            raise ValidationException(0, "NODE_DEF_ALREADY_DEFINED",
+            raise ValidationException(0, "NODE_DUPLICATED",
                                       "Exists a previous node definition with: " + qname)
         self._nodes[qname] = node_definition
 

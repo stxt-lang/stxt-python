@@ -38,7 +38,7 @@ class Type(ABC):
 
 
 def _not_allowed_text(n: Node) -> ValidationException:
-    return ValidationException(n.get_line(), "NOT_ALLOWED_TEXT",
+    return ValidationException(n.get_line(), "BLOCK_FORM_NOT_ALLOWED",
                                f"Not allowed text in node {n.get_qualified_name()}")
 
 
@@ -75,7 +75,7 @@ class GROUP(Type):
 
     def validate(self, ns_node: NodeDefinition, node: Node) -> None:
         if node.is_text_node() or not is_empty(node.get_text()):
-            raise ValidationException(node.get_line(), "INVALID_VALUE",
+            raise ValidationException(node.get_line(), "VALUE_NOT_ALLOWED",
                                       f"Node '{node.get_name()}' has to be empty")
 
 
@@ -99,7 +99,7 @@ class TEXT(Type):
 
     def validate(self, ns_node: NodeDefinition, node: Node) -> None:
         if isinstance(node, InlineNode) and len(node.get_children()) > 0:
-            raise ValidationException(node.get_line(), "NOT_ALLOWED_CHILDREN_TEXT",
+            raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED",
                                       f"Not allowed children nodes in node {node.get_qualified_name()}")
 
 
@@ -111,7 +111,7 @@ class MARKDOWN(Type):
 
     def validate(self, ns_node: NodeDefinition, node: Node) -> None:
         if isinstance(node, InlineNode) and len(node.get_children()) > 0:
-            raise ValidationException(node.get_line(), "NOT_ALLOWED_CHILDREN_TEXT",
+            raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED",
                                       f"Not allowed children nodes in node {node.get_qualified_name()}")
 
 
@@ -309,9 +309,9 @@ class TypeRegistry:
 
     @classmethod
     def register(cls, instance: Type) -> None:
-        """Raises ``DUPLICATED_TYPE`` if a type with that name already exists."""
+        """Raises ``TYPE_DUPLICATED`` if a type with that name already exists."""
         if instance.get_name() in cls._registry:
-            raise RuntimeException("DUPLICATED_TYPE", "Type already defined: " + instance.get_name())
+            raise RuntimeException("TYPE_DUPLICATED", "Type already defined: " + instance.get_name())
         cls._registry[instance.get_name()] = instance
 
     @classmethod

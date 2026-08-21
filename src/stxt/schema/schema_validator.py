@@ -69,7 +69,7 @@ class SchemaValidator(Validator):
 
         # Closed model: the node must be defined in the schema of its namespace
         if schema_node is None:
-            errors.append(ValidationException(node.get_line(), "NODE_NOT_EXIST_IN_SCHEMA",
+            errors.append(ValidationException(node.get_line(), "NODE_NOT_DEFINED_IN_SCHEMA",
                                               f"NOT EXIST NODE {node.get_canonical_name()} for namespace {sch.get_namespace()}"))
             return errors
 
@@ -102,7 +102,7 @@ class SchemaValidator(Validator):
 
         type_ = TypeRegistry.get(node_type)
         if type_ is None:
-            errors.append(ValidationException(n.get_line(), "TYPE_NOT_SUPPORTED", "Node type not supported: " + node_type))
+            errors.append(ValidationException(n.get_line(), "TYPE_NOT_VALID", "Node type not supported: " + node_type))
             return errors
 
         try:
@@ -110,7 +110,7 @@ class SchemaValidator(Validator):
         except ValidationException as ve:
             errors.append(ve)
         except Exception as e:  # noqa: BLE001 - collected, never propagated
-            errors.append(ValidationException(n.get_line(), "VALIDATION_ERROR", str(e)))
+            errors.append(ValidationException(n.get_line(), "UNEXPECTED_ERROR", str(e)))
         return errors
 
     def _validate_count(self, ns_node: NodeDefinition, node: Node) -> list[ValidationException]:
@@ -135,16 +135,16 @@ class SchemaValidator(Validator):
         max_ = ch_node.get_max()
 
         if min_ is not None and num < min_:
-            errors.append(ValidationException(node.get_line(), "INVALID_NUMBER",
+            errors.append(ValidationException(node.get_line(), "TOO_FEW_CHILDREN",
                                               f"{num} nodes of '{ch_node.get_qualified_name()}' and min is {min_}"))
 
         if max_ is not None and num > max_:
             # Error on the parent...
-            errors.append(ValidationException(node.get_line(), "INVALID_NUMBER",
+            errors.append(ValidationException(node.get_line(), "TOO_MANY_CHILDREN",
                                               f"{num} nodes of '{ch_node.get_qualified_name()}' and max is {max_}"))
             # ...and on each offending child, for line-accurate reporting
             for child in children:
-                errors.append(ValidationException(child.get_line(), "INVALID_NUMBER",
+                errors.append(ValidationException(child.get_line(), "TOO_MANY_CHILDREN",
                                                   f"Too many '{ch_node.get_qualified_name()}' nodes: found {num}, max is {max_}"))
         return errors
 

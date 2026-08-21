@@ -14,7 +14,8 @@ from typing import Optional
 
 from ..core.node import InlineNode, Node
 from ..core.parser import Parser
-from ..core.string_utils import is_empty, normalize_chars
+from ..core.string_utils import is_empty, lower_case, normalize_chars
+from ..core.validations import NAMESPACE_FORMAT
 from ..exceptions import ParseException, ValidationException
 from ..schema.child_definition import ChildDefinition
 from ..schema.node_definition import NodeDefinition
@@ -22,16 +23,32 @@ from ..schema.schema import Schema
 from ..schema.types import TypeRegistry
 from .child_line_parser import parse_child_line
 
+# The namespace of the template language itself (re-exported by template_schema_provider)
+TEMPLATE_NAMESPACE = "@stxt.template"
+
 
 def transform_template_node_to_schema(node: Node) -> Schema:
     """Turns the root node ``Template (@stxt.template): <ns>`` into a Schema.
 
     Raises:
-        ValidationException: ``TEMPLATE_STRUCTURE_REQUIRED`` and every template error, with the
-            line pointing at the original document.
+        ValidationException: ``TEMPLATE_ROOT_NOT_VALID``, ``TEMPLATE_NAMESPACE_EMPTY``,
+            ``TEMPLATE_STRUCTURE_REQUIRED`` and every template error, with the line pointing
+            at the original document.
     """
-    # The inline value of "Template" is the target namespace
-    result = Schema(node.get_text(), node.get_line(), None)
+    # The root must be 'Template (@stxt.template): <ns>' (STXT-TEMPLATE-SPEC 14.1)
+    if node.get_canonical_name() != "template" or node.get_namespace() != TEMPLATE_NAMESPACE:
+        raise ValidationException(node.get_line(), "TEMPLATE_ROOT_NOT_VALID",
+                                  f"Expected template({TEMPLATE_NAMESPACE}) but got "
+                                  f"{node.get_canonical_name()}({node.get_namespace()})")
+
+    # The inline value of "Template" is the target namespace: present and well formed
+    target = lower_case(node.get_text())
+    if is_empty(target):
+        raise ValidationException(node.get_line(), "TEMPLATE_NAMESPACE_EMPTY", "Template namespace is empty")
+    if NAMESPACE_FORMAT.fullmatch(target) is None:
+        raise ValidationException(node.get_line(), "TEMPLATE_ROOT_NOT_VALID",
+                                  f"Template namespace not valid: {node.get_text()}")
+    result = Schema(target, node.get_line(), None)
 
     # Locate the mandatory "Structure >>" block (a text root has no children, hence none)
     structure: Optional[Node] = None
@@ -68,7 +85,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
     # A Structure line belongs to the template grammar: it must use ':'; a core BLOCK node
     # ('>>') is invalid here even when its text happens to be empty (6.3).
     if not isinstance(node, InlineNode):
-        raise ValidationException(node.get_line(), "INVALID_CHILD_LINE", "Template Structure lines must use ':'")
+        raise ValidationException(node.get_line(), "STRUCTURE_LINE_NOT_VALID", "Template Structure lines must use ':'")
 
     namespace = node.get_namespace()
     name = node.get_name()
@@ -85,7 +102,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
     if namespace != schema.get_namespace():
         type_ = cl.get_type()
         if type_ is not None and type_.strip() != "":
-            raise ValidationException(node.get_line(), "TYPE_DEFINITION_NOT_ALLOWED",
+            raise ValidationException(node.get_line(), "TYPE_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
                                       "Not allowed type definition in external namespaces")
         if cl.get_values() is not None:
             raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
@@ -121,14 +138,14 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
         if values is not None:
             if type_ != "ENUM":
                 # Same code as SchemaParser: a template is sugar equivalent to a schema
-                raise ValidationException(node.get_line(), "VALUES_ONLY_SUPPORTED_BY_ENUM",
+                raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_FOR_TYPE",
                                           f"Values only supported for type ENUM, not for type {type_}")
             for value in values:
                 schema_node.add_value(value, node.get_line())
 
         # An ENUM with no list of values is an invalid template (9 and 13.7)
         if type_ == "ENUM" and (values is None or len(values) == 0):
-            raise ValidationException(node.get_line(), "VALUES_EMPTY_FOR_ENUM", "ENUM Type must include values")
+            raise ValidationException(node.get_line(), "VALUES_REQUIRED", "ENUM Type must include values")
 
     else:
         # --- Reappearance: must be a "@Node Name" reference ---
@@ -136,7 +153,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
 
         # A reappearance without "@" would redefine an existing node: error.
         if type_ is None or not type_.startswith("@"):
-            raise ValidationException(node.get_line(), "NODE_DEFINED_MULTIPLE_TIMES",
+            raise ValidationException(node.get_line(), "REFERENCE_REQUIRED",
                                       "Multiple node reference must start with @: " + node.get_name())
 
         reference = type_[1:].strip()
@@ -149,7 +166,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
 
         # The name of the reference must match (canonically) the one of the line (14.12)
         if normalize_chars(reference) != node.get_canonical_name():
-            raise ValidationException(node.get_line(), "NODE_REFERENCE_NOT_VALID",
+            raise ValidationException(node.get_line(), "REFERENCE_NAME_NOT_VALID",
                                       f"Reference must be '@{node.get_name()}', not '{reference}'")
 
         # A reference may override the cardinality, but it may redefine neither the ENUM
@@ -173,7 +190,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
     for child in children:
         # 6.3 again: every Structure line uses ':', so a child is inline too
         if not isinstance(child, InlineNode):
-            raise ValidationException(child.get_line(), "INVALID_CHILD_LINE", "Template Structure lines must use ':'")
+            raise ValidationException(child.get_line(), "STRUCTURE_LINE_NOT_VALID", "Template Structure lines must use ':'")
         cl = parse_child_line(child.get_value(), child.get_line())
 
         child_namespace = child.get_namespace()
@@ -211,19 +228,19 @@ def _add_descriptions(schema: Schema, nodes: list[Node]) -> None:
             namespace = schema.get_namespace()
 
         if namespace != schema.get_namespace():
-            raise ValidationException(node.get_line(), "EXTERNAL_DESCRIPTION_NOT_ALLOWED",
+            raise ValidationException(node.get_line(), "DESCRIPTION_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
                                       "Not allowed description in external namespaces")
 
         if isinstance(node, InlineNode) and len(node.get_children()) > 0:
-            raise ValidationException(node.get_line(), "CHILDREN_DESCRIPTION_NOT_ALLOWED",
+            raise ValidationException(node.get_line(), "DESCRIPTION_CHILDREN_NOT_ALLOWED",
                                       "Not allowed children in description")
 
         node_def = schema.get_node_definition(node.get_name())
         if node_def is None:
-            raise ValidationException(node.get_line(), "NODE_NOT_FOUND", "Not found node with name: " + node.get_name())
+            raise ValidationException(node.get_line(), "DESCRIPTION_NODE_NOT_FOUND", "Not found node with name: " + node.get_name())
 
         if node_def.get_description() is not None:
-            raise ValidationException(node.get_line(), "DESCRIPTION_ALREADY_DEFINED",
+            raise ValidationException(node.get_line(), "DESCRIPTION_DUPLICATED",
                                       "Exists a previous description for node: " + node.get_name())
 
         node_def.set_description(node.get_text())

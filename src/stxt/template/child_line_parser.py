@@ -28,7 +28,7 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
     """Interprets cardinality, type and values of a RuleSpec.
 
     Raises:
-        ValidationException: ``INVALID_CHILD_LINE``, ``INVALID_CHILD_COUNT``,
+        ValidationException: ``STRUCTURE_LINE_NOT_VALID``, ``CARDINALITY_NOT_VALID``,
             ``MIN_GREATER_THAN_MAX`` or ``VALUE_DUPLICATED``.
     """
     # Line with no RuleSpec: everything defaults
@@ -37,7 +37,7 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
 
     matcher = CHILD_LINE_PATTERN.match(raw_line)
     if matcher is None:
-        raise ValidationException(line_number, "INVALID_CHILD_LINE", "Line not valid: " + raw_line)
+        raise ValidationException(line_number, "STRUCTURE_LINE_NOT_VALID", "Line not valid: " + raw_line)
 
     # --- Type (or @Name reference) ---
     type_ = matcher.group("type")
@@ -63,7 +63,7 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
     elif "," in count:
         parts = count.split(",")
         if len(parts) != 2:
-            raise ValidationException(line_number, "INVALID_CHILD_COUNT", f"Invalid count {count} in line: {raw_line}")
+            raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
         min_ = _parse_count(parts[0].strip(), count, raw_line, line_number)
         max_ = _parse_count(parts[1].strip(), count, raw_line, line_number)
         if min_ > max_:
@@ -97,7 +97,7 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
 def _parse_count(num: str, count: str, raw_line: str, line_number: int) -> int:
     # num, min and max must be NON-NEGATIVE integers, with no trailing text (7.1)
     if not is_natural(num):
-        raise ValidationException(line_number, "INVALID_CHILD_COUNT", f"Invalid count {count} in line: {raw_line}")
+        raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
     return parse_integer(num)
 
 
