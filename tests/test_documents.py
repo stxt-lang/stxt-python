@@ -29,7 +29,7 @@ def test_validates(file):
 
 def test_every_document_declares_a_namespace_with_a_known_schema():
     # If this failed, the tests above would pass trivially: with no namespace the
-    # ConditionalValidator validates nothing.
+    # SchemaValidator validates nothing (STXT-SCHEMA-SPEC 5).
     for file in FILES:
         for node in Parser().parse_result(read(file)).get_nodes():
             namespace = node.get_namespace()

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stxt"
-version = "0.10.0"
+version = "1.0.0"
 description = "STXT (Semantic Text) parser, schema/template validator and discovery resolver"
 readme = "README.md"
 license = "MIT"

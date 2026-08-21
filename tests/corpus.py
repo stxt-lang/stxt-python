@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from stxt import ConditionalValidator, ParseException, ParseResult, Parser, SchemaValidator, UnifiedSchemaProvider
+from stxt import ParseException, ParseResult, Parser, SchemaValidator, UnifiedSchemaProvider
 
 # Folders of stxt-web holding schemas and templates (they are loaded into the provider).
 SCHEMA_DIRS = [".stxt", "examples/definitions"]
@@ -86,7 +86,7 @@ def load_provider(dirs: list[str] = SCHEMA_DIRS) -> UnifiedSchemaProvider:
 def parse_with_schemas(text: str, provider: UnifiedSchemaProvider) -> ParseResult:
     """Parses a document validating it against the provider (only namespaced nodes)."""
     parser = Parser()
-    parser.register_validator(ConditionalValidator(SchemaValidator(provider)))
+    parser.register_validator(SchemaValidator(provider))
     return parser.parse_result(text)
 
 

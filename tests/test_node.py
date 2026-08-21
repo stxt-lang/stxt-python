@@ -250,10 +250,9 @@ def test_the_parser_sets_the_line_and_code_built_nodes_have_none():
     assert TextNode("T").get_line() == NO_LINE
 
 
-def test_get_normalized_name_is_the_deprecated_alias_of_get_canonical_name():
+def test_get_canonical_name_folds_case_and_separators():
     n = InlineNode("Año Nuevo")
     assert n.get_canonical_name() == "año-nuevo"
-    assert n.get_normalized_name() == n.get_canonical_name()
 
 
 def test_constructor_shapes():

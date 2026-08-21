@@ -128,7 +128,7 @@ loads either kind, validates it against the corresponding meta-schema, and regis
 namespace.
 
 ```python
-from stxt import ConditionalValidator, Parser, SchemaValidator, UnifiedSchemaProvider, ValidationException
+from stxt import Parser, SchemaValidator, UnifiedSchemaProvider, ValidationException
 
 schema_text = """Schema (@stxt.schema): blog.post
 \tNode: Article
@@ -146,8 +146,8 @@ provider = UnifiedSchemaProvider()
 provider.add_file(schema_text)
 
 parser = Parser()
-# ConditionalValidator only validates nodes that carry a namespace
-parser.register_validator(ConditionalValidator(SchemaValidator(provider)))
+# Only nodes that carry a namespace are validated; free nodes pass through
+parser.register_validator(SchemaValidator(provider))
 
 result = parser.parse_result(document_text)
 
@@ -189,7 +189,7 @@ a test can pass an in-memory tree instead. `DiscoveryResult` implements `SchemaP
 goes straight into the validator:
 
 ```python
-from stxt import ConditionalValidator, Parser, SchemaValidator
+from stxt import Parser, SchemaValidator
 from stxt.discovery import resolve
 
 # The chain is per document: pass the directory the document lives in
@@ -204,7 +204,7 @@ for error in result.get_errors():
     print(f"[{error.code}] {error.message}")
 
 parser = Parser()
-parser.register_validator(ConditionalValidator(SchemaValidator(result)))
+parser.register_validator(SchemaValidator(result))
 parsed = parser.parse_result(document_text)
 
 definition = result.get_definition("blog.post")
@@ -262,7 +262,7 @@ Everything importable from `stxt`:
   `SchemaProviderMeta`, `NodeDefinition`, `ChildDefinition`, `transform_node_to_schema`
 - **Templates** — `TemplateSchemaProviderMemory`, `MetaTemplateSchemaProvider`,
   `transform_template_node_to_schema`
-- **Runtime** — `UnifiedSchemaProvider`, `ConditionalValidator`, `NodeWriter`, `IndentStyle`,
+- **Runtime** — `UnifiedSchemaProvider`, `NodeWriter`, `IndentStyle`,
   `to_canonical_tree`, `to_canonical_json`
 - **Discovery** — `DiscoveryResolver`, `DiscoveryResult`, `DiscoveryDefinition`,
   `DiscoveryLevel`, `DiscoveryError`, `DiscoveryFileSystem`, `DiscoveryEntry`,

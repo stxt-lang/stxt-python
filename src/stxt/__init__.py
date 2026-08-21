@@ -36,7 +36,6 @@ from .discovery import (
 from .exceptions import ParseException, RuntimeException, ValidationException
 from .processors import Observer, Validator
 from .runtime import (
-    ConditionalValidator,
     IndentStyle,
     NodeWriter,
     UnifiedSchemaProvider,
@@ -52,6 +51,8 @@ from .schema import (
     SchemaProviderMemory,
     SchemaProviderMeta,
     SchemaValidator,
+    Type,
+    TypeRegistry,
     transform_node_to_schema,
 )
 from .template import (
@@ -61,7 +62,7 @@ from .template import (
 )
 from .template.template_schema_provider import TEMPLATE_NAMESPACE
 
-__version__ = "0.10.0"
+__version__ = "1.0.0"
 
 __all__ = [
     "__version__", "SPEC_VERSION",
@@ -75,11 +76,12 @@ __all__ = [
     # schema
     "Schema", "SCHEMA_NAMESPACE", "NodeDefinition", "ChildDefinition", "SchemaProvider",
     "SchemaProviderMemory", "SchemaProviderMeta", "SchemaValidator", "transform_node_to_schema",
+    "Type", "TypeRegistry",
     # template
     "TEMPLATE_NAMESPACE", "MetaTemplateSchemaProvider", "TemplateSchemaProviderMemory",
     "transform_template_node_to_schema",
     # runtime
-    "NodeWriter", "IndentStyle", "to_canonical_tree", "to_canonical_json", "ConditionalValidator",
+    "NodeWriter", "IndentStyle", "to_canonical_tree", "to_canonical_json",
     "UnifiedSchemaProvider",
     # discovery
     "DiscoveryResolver", "DiscoveryResult", "DiscoveryDefinition", "DiscoveryLevel", "DiscoveryError",

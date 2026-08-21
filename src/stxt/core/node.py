@@ -82,10 +82,6 @@ class Node(ABC):
         """Canonical name (STXT-SPEC section 4.3), used to compare and look up by identity."""
         return self._canonical_name
 
-    def get_normalized_name(self) -> str:
-        """Deprecated alias of :meth:`get_canonical_name`, kept for parity with the other ports."""
-        return self._canonical_name
-
     def get_qualified_name(self) -> str:
         """Logical identity: ``effective_namespace:canonical_name`` (just the canonical name if
         there is no namespace). Computed on demand: it follows namespace changes and moves."""

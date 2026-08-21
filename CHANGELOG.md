@@ -3,6 +3,30 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## 1.0.0 - Unreleased
+
+The first stable release. The language (the five specifications, `SPEC_VERSION = "1.0"`), the
+canonical tree and the error codes are frozen for the whole 1.x line, and so is the public API
+of this package. Same scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 1.0.0.
+
+### Removed
+
+- `Node.get_normalized_name()`, deprecated alias of `get_canonical_name()` (it only existed on
+  `Node`, never on the schema definitions).
+- `ConditionalValidator` (`stxt.runtime.conditional_validator`), deprecated since 0.8.0:
+  `SchemaValidator` already lets the nodes without a namespace through (STXT-SCHEMA-SPEC 5),
+  so register it directly.
+
+### Added (API parity audit against `@stxt-lang/core` and `dev.stxt:stxt-core`)
+
+- `Type` and `TypeRegistry` are exported from the package root (they were only in
+  `stxt.schema`).
+
+### Tests
+
+- `SPEC_VERSION` is compared against the `Metadata/Version` that STXT-SPEC declares in
+  `stxt-web/es/stxt-core-ref.stxt`, not only against a literal.
+
 ## 0.10.0 - 2026-08-21
 
 ### Language changes (STXT-SCHEMA-SPEC 9.5 and 7.2/13, STXT-TEMPLATE-SPEC 14.14)
