@@ -39,9 +39,13 @@ def is_valid_base64(text: str) -> bool:
     """True if ``text`` is decodable Base64 content.
 
     Missing padding is tolerated (as the JS and Java ports do), but the content must
-    re-encode to itself: partially valid strings with leftover bits are rejected.
+    re-encode to itself: partially valid strings with leftover bits are rejected, and so is
+    the empty string (STXT-SCHEMA-SPEC 9.5). ``validate=True`` makes the decoder reject
+    characters outside the alphabet instead of silently ignoring them.
     """
     stripped = text.rstrip("=")
+    if stripped == "":
+        return False
     padded = stripped + "=" * (-len(stripped) % 4)
     try:
         decoded = base64.b64decode(padded, validate=True)

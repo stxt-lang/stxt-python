@@ -3,6 +3,32 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## 0.10.0 - 2026-08-21
+
+### Language changes (STXT-SCHEMA-SPEC 9.5 and 7.2/13, STXT-TEMPLATE-SPEC 14.14)
+
+- Binary types (`HEXADECIMAL`, `BINARY`, `BASE64`): every blank (space U+0020, tab U+0009) is
+  removed wherever it is before validating, in both the inline and the block form (the block
+  lines are concatenated first). `DE AD BE EF`, `1010 1010` and Base64 wrapped at 76 columns
+  validate; `DE:AD`, `DE-AD` and a value that is empty after removing the blanks are
+  `INVALID_VALUE`. Before, only the edges of each block line were trimmed.
+- An empty `Value:` inside the `Values` of an `ENUM` is a schema error, `VALUE_EMPTY`, at the
+  line of that `Value` (condition 14 of STXT-SCHEMA-SPEC 13). In a template, an empty item of
+  the `[...]` list (`[a, , b]`, `[a, b,]`) is `VALUE_EMPTY` at the line of the `Structure`
+  line; an empty list `[]` stays `VALUES_REQUIRED`.
+
+### Message framing (the same in every port)
+
+- `message` / `get_message()` of `ParseException`, `ValidationException` and
+  `RuntimeException` is only the description, with no code and no line; the frame lives in
+  `__str__` (`[CODE] line N: message`, `[CODE] message`). This was already the behaviour of
+  the Python port; it is now the documented contract, pinned by a test.
+
+### API
+
+- `SPEC_VERSION = "1.0"` (`stxt.SPEC_VERSION`, `stxt.core.constants`): the version of the
+  STXT specifications this library implements, distinct from `__version__`.
+
 ## 0.9.1 - 2026-08-21
 
 ### Error codes renamed (normative annex: STXT-SPEC 11.1, STXT-SCHEMA-SPEC 13.1, STXT-TEMPLATE-SPEC 14.1)

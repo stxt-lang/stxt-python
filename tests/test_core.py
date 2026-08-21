@@ -2,7 +2,9 @@
 
 import pytest
 
-from stxt import InlineNode, LineIndent, Observer, ParseException, Parser, TextNode, parse_line
+import stxt
+from stxt import (InlineNode, LineIndent, Observer, ParseException, Parser, RuntimeException, SPEC_VERSION,
+                  TextNode, ValidationException, parse_line)
 
 
 def _codes(text):
@@ -246,6 +248,61 @@ def test_parse_raises_the_first_error():
         Parser().parse("A: x\n\t\tB: y\nnot a line\n")
     assert info.value.code == "INDENTATION_LEVEL_NOT_VALID"
     assert info.value.line == 2
+
+
+# ---------------------------------------------------------------- exception contract
+
+def test_message_is_only_the_description_and_the_frame_lives_in_str():
+    """Message framing (0.10.0, the same in every port): ``message`` carries no code and no
+    line; ``__str__`` is ``[CODE] line N: message`` / ``[CODE] message``."""
+    with pytest.raises(ParseException) as info:
+        Parser().parse("A: x\n\t\tB: y\n")
+    error = info.value
+    assert error.message == "Level of indent incorrect: 2"
+    assert error.get_message() == error.message
+    assert error.code == "INDENTATION_LEVEL_NOT_VALID" and error.line == 2
+    assert str(error) == "[INDENTATION_LEVEL_NOT_VALID] line 2: Level of indent incorrect: 2"
+    assert error.args == ("Level of indent incorrect: 2",)
+
+    moved = error.with_line(9)
+    assert type(moved) is ParseException
+    assert (moved.line, moved.code, moved.message) == (9, error.code, error.message)
+    assert str(moved) == "[INDENTATION_LEVEL_NOT_VALID] line 9: Level of indent incorrect: 2"
+
+    validation = ValidationException(3, "INVALID_VALUE", "Bad value")
+    assert validation.message == "Bad value"
+    assert str(validation) == "[INVALID_VALUE] line 3: Bad value"
+    assert str(validation.with_line(4)) == "[INVALID_VALUE] line 4: Bad value"
+    assert type(validation.with_line(4)) is ValidationException
+
+    runtime = RuntimeException("AMBIGUOUS_CHILD", "Ambiguous")
+    assert runtime.message == "Ambiguous" and runtime.get_message() == "Ambiguous"
+    assert str(runtime) == "[AMBIGUOUS_CHILD] Ambiguous"
+
+
+def test_no_error_message_carries_its_own_code_or_line():
+    """The description never repeats the frame, whichever module raises it."""
+    documents = [
+        "A: x\n\t\tB: y\n",
+        "A: x\n   B: y\n",
+        "A: x\n\t  B: y\n",
+        "not a line\n",
+        "A >> x\n",
+        "A (bad): x\n",
+        "-: x\n",
+    ]
+    for text in documents:
+        for error in Parser().parse_result(text).get_errors():
+            assert f"[{error.code}]" not in error.message, text
+            assert not error.message.lower().startswith("error at line"), text
+            assert f"line {error.line}" not in error.message.lower() or "indent" in error.message.lower(), text
+
+
+def test_spec_version_is_the_version_of_the_specifications():
+    assert SPEC_VERSION == "1.0"
+    assert stxt.SPEC_VERSION is SPEC_VERSION
+    assert "SPEC_VERSION" in stxt.__all__ and "__version__" in stxt.__all__
+    assert stxt.__version__ != SPEC_VERSION, "the package version is not the spec version"
 
 
 # ---------------------------------------------------------------- observers

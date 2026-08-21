@@ -129,11 +129,36 @@ def test_binary_types_accept_inline_and_block_and_ignore_line_edges():
     assert codes(inline("HEXADECIMAL", "DEADbeef01")) == []
     assert codes(inline("HEXADECIMAL", "#FF")) == ["INVALID_VALUE"]
     assert codes(block("HEXADECIMAL", "  DEAD ", "", "beef")) == []
-    assert codes(block("HEXADECIMAL", "DE AD")) == ["INVALID_VALUE"], "whitespace inside a line is kept"
+    assert codes(block("HEXADECIMAL", "DE AD")) == [], "blanks inside a line are removed too (9.5)"
 
     assert codes(inline("BINARY", "0101")) == []
     assert codes(inline("BINARY", "0102")) == ["INVALID_VALUE"]
     assert codes(block("BINARY", "01", "10")) == []
+
+
+def test_binary_types_drop_every_blank_before_validating():
+    """STXT-SCHEMA-SPEC 9.5 (since 2026-08-21): spaces and tabs are removed wherever they are,
+    in both forms; nothing else is."""
+    assert codes(inline("HEXADECIMAL", "DE AD BE EF")) == []
+    assert codes(inline("HEXADECIMAL", "DE\tAD")) == []
+    assert codes(inline("BINARY", "1010 1010")) == []
+    assert codes(inline("BASE64", "SG Vs bG 8=")) == []
+    wrapped = "U1RYVCBpcyBhIGh1bWFuLWZpcnN0IHRleHQgZm9ybWF0IHRoYXQgaXMgZWFzeSB0byByZWFkIGFuZCB0cml2aWFs" \
+              "IHRvIHBhcnNlLCBkZXNpZ25lZCB3aXRoIHNlY3VyaXR5IGluIG1pbmQu"
+    lines = [wrapped[i:i + 76] for i in range(0, len(wrapped), 76)]
+    assert len(lines) > 1 and len(lines[0]) == 76
+    assert codes(block("BASE64", *[f"  {line}\t " for line in lines])) == []
+    assert codes(block("BASE64", "SG Vs", "\tbG 8=")) == []
+    # Only blanks are removed
+    assert codes(inline("HEXADECIMAL", "DE:AD")) == ["INVALID_VALUE"]
+    assert codes(inline("HEXADECIMAL", "DE-AD")) == ["INVALID_VALUE"]
+    assert codes(inline("BASE64", "SG:Vs")) == ["INVALID_VALUE"]
+    assert codes(inline("BINARY", "10\u00a010")) == ["INVALID_VALUE"], "an NBSP is not a blank"
+    # Empty after removing the blanks
+    assert codes(inline("HEXADECIMAL", "")) == ["INVALID_VALUE"]
+    assert codes(inline("HEXADECIMAL", " \t ")) == ["INVALID_VALUE"]
+    assert codes(block("BINARY", "  ", "\t")) == ["INVALID_VALUE"]
+    assert codes(block("BASE64", " ")) == ["INVALID_VALUE"]
 
 
 def test_base64():
@@ -183,6 +208,8 @@ def test_closed_content_model_and_cardinalities():
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: TEXT\n\t\tValues:\n\t\t\tValue: v\n", "VALUES_NOT_ALLOWED_FOR_TYPE"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n", "VALUES_REQUIRED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n\t\tValues:\n\t\t\tValue: v\n\t\t\tValue: v\n", "VALUE_DUPLICATED"),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n\t\tValues:\n\t\t\tValue: x\n\t\t\tValue:\n", "VALUE_EMPTY"),
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n\t\tValues:\n\t\t\tValue: \t \n", "VALUE_EMPTY"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\t\tMin: 2\n\t\t\t\tMax: 1\n\tNode: B\n", "MIN_GREATER_THAN_MAX"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: Missing\n", "CHILD_NOT_DEFINED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\tNode: a\n", "NODE_DUPLICATED"),

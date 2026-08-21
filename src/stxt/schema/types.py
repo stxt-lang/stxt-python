@@ -45,13 +45,14 @@ def _not_allowed_text(n: Node) -> ValidationException:
 def binary_value(node: Node) -> str:
     """Effective value for the INLINE/BLOCK binary types (HEXADECIMAL, BINARY, BASE64).
 
-    In BLOCK form, validation applies to the concatenation of the lines, ignoring line
-    breaks, empty lines and the leading and trailing spaces or tabs of each line. Whitespace
-    INSIDE a line is kept (and is therefore invalid content).
+    Every blank (U+0020 space, U+0009 tab) is removed wherever it is, in both forms; in BLOCK
+    form the lines are concatenated, which also drops line breaks and empty lines. So
+    ``DE AD BE EF``, ``1010 1010`` and Base64 wrapped at 76 columns validate. No other
+    character is removed: ``DE:AD`` or ``DE-AD`` stay invalid (STXT-SCHEMA-SPEC 9.5, since
+    2026-08-21).
     """
-    if not isinstance(node, TextNode):
-        return node.get_text()
-    return "".join(line.strip() for line in node.get_text_lines())
+    raw = "".join(node.get_text_lines()) if isinstance(node, TextNode) else node.get_text()
+    return raw.replace(" ", "").replace("\t", "")
 
 
 # ---------------------------------------------------------------- structural types

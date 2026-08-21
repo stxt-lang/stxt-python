@@ -157,6 +157,9 @@ def _template_error(structure_lines, description_lines=None):
     (["Root: ENUM"], "VALUES_REQUIRED"),
     (["Root: ENUM []"], "VALUES_REQUIRED"),
     (["Root: ENUM [a, a]"], "VALUE_DUPLICATED"),
+    (["Root: ENUM [a, , b]"], "VALUE_EMPTY"),
+    (["Root: ENUM [a, b,]"], "VALUE_EMPTY"),
+    (["Root: ENUM [,]"], "VALUE_EMPTY"),
     (["Root: TEXT [a, b]"], "VALUES_NOT_ALLOWED_FOR_TYPE"),
     (["Root: TEXT", "\tChild:"], "CHILDREN_NOT_ALLOWED_FOR_TYPE"),
     (["Root:", "\tA:", "Root:"], "REFERENCE_REQUIRED"),
@@ -222,6 +225,13 @@ def test_open_ancestor_recursion_and_references_to_closed_definitions():
 def test_child_line_parser(raw, expected):
     cl = parse_child_line(raw, 1)
     assert (cl.get_type(), cl.get_min(), cl.get_max(), cl.get_values()) == expected
+
+
+@pytest.mark.parametrize("raw", ["ENUM [a, , b]", "ENUM [a, b,]", "ENUM [, a]", "ENUM [ , ]"])
+def test_child_line_parser_rejects_an_empty_enum_item(raw):
+    with pytest.raises(ValidationException) as info:
+        parse_child_line(raw, 7)
+    assert info.value.code == "VALUE_EMPTY" and info.value.line == 7
 
 
 def test_writer_keeps_a_template_readable():

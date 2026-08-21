@@ -3,6 +3,15 @@
 Every exception carries an UPPERCASE error code that is identical across
 implementations: error codes are part of the conformance surface
 (``stxt-impl/exceptions/exceptions.txt``).
+
+Message framing (since 0.10.0, the same in every port): ``message`` (and ``get_message()``)
+is only the description, with no code and no line -- ``"Level of indent incorrect: 2"``. The
+code and the line are separate attributes, and whoever formats output (a CLI, an editor)
+composes them. The frame lives in ``__str__``, so an uncaught exception still says where it
+happened:
+
+- ``ParseException`` / ``ValidationException``: ``"[CODE] line N: message"``
+- ``RuntimeException``: ``"[CODE] message"``
 """
 
 from __future__ import annotations

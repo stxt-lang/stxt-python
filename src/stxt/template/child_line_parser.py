@@ -82,8 +82,14 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
     values_str = matcher.group("values")
     if values_str is not None:
         values = []
-        for part in values_str.split(","):
+        parts = values_str.split(",")
+        for part in parts:
             part = part.strip()
+            # An empty item ("[a, , b]", "[a, b,]") is an error, as an empty Value: is in a
+            # schema (STXT-TEMPLATE-SPEC 14.14). Only the whole list may be empty ("[]"),
+            # which the template parser reports as VALUES_REQUIRED.
+            if part == "" and len(parts) > 1:
+                raise ValidationException(line_number, "VALUE_EMPTY", f"Empty ENUM value in {values_str}")
             if part == "":
                 continue
             # ENUM values cannot repeat after the trim (14.14)

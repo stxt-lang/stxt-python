@@ -253,7 +253,10 @@ Everything importable from `stxt`:
 
 - **Parsing** — `Parser`, `ParseResult`, `Node`, `InlineNode`, `TextNode`, `NO_LINE`,
   `LineIndent`, `parse_line`
-- **Exceptions** — `ParseException`, `ValidationException`, `RuntimeException`
+- **Exceptions** — `ParseException`, `ValidationException`, `RuntimeException`. Their `message`
+  is only the description; `str(e)` adds the frame: `[CODE] line N: message` (or
+  `[CODE] message` for `RuntimeException`)
+- **Versions** — `__version__` (the package) and `SPEC_VERSION` (the specifications it implements)
 - **Extension points** — `Observer`, `Validator`
 - **Schemas** — `Schema`, `SchemaValidator`, `SchemaProvider`, `SchemaProviderMemory`,
   `SchemaProviderMeta`, `NodeDefinition`, `ChildDefinition`, `transform_node_to_schema`

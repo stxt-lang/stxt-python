@@ -115,6 +115,10 @@ def _create_node_definition(node: Node, namespace: str) -> NodeDefinition:
 
         values = _inline(values[0]).get_children_by_name("value")
         for value in values:
+            # An empty Value: is a schema error (7.2, condition 14): an enumeration whose only
+            # valid value is the empty string makes no sense
+            if is_empty(value.get_text()):
+                raise ValidationException(value.get_line(), "VALUE_EMPTY", "Value of ENUM cannot be empty")
             result.add_value(value.get_text(), value.get_line())
 
     # An ENUM must declare at least one value

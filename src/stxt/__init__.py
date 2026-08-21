@@ -16,7 +16,7 @@ Quick start::
                 print("  ", child.get_name(), child.get_text())
 """
 
-from .core.constants import EMPTY_NAMESPACE
+from .core.constants import EMPTY_NAMESPACE, SPEC_VERSION
 from .core.line_indent import LineIndent, parse_line
 from .core.node import NO_LINE, InlineNode, Node, TextNode
 from .core.parse_result import ParseResult
@@ -61,10 +61,10 @@ from .template import (
 )
 from .template.template_schema_provider import TEMPLATE_NAMESPACE
 
-__version__ = "0.9.1"
+__version__ = "0.10.0"
 
 __all__ = [
-    "__version__",
+    "__version__", "SPEC_VERSION",
     # core
     "Parser", "ParseResult", "Node", "InlineNode", "TextNode", "NO_LINE", "LineIndent", "parse_line",
     "EMPTY_NAMESPACE",
