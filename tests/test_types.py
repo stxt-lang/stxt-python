@@ -79,11 +79,16 @@ def test_enum_is_case_sensitive_and_inline_only():
     ("BOOLEAN", ["true", "false"], ["True", "yes", "1", ""]),
     ("INTEGER", ["0", "-12", "+7"], ["1.5", "abc", "", "١٢"]),
     ("NATURAL", ["0", "42"], ["-1", "+1", "1.0"]),
-    ("NUMBER", ["1", "-1.5", ".5", "1e10", "1.2E-3", "+3."], ["abc", "1,5", ""]),
-    ("DATE", ["2026-08-16"], ["16-08-2026", "2026-8-16", "2026-08-16T10:00"]),
-    ("TIME", ["10:30:00"], ["10:30", "1:30:00"]),
-    ("TIMESTAMP", ["2026-08-16T10:30", "2026-08-16T10:30:00", "2026-08-16T10:30:00.123Z", "2026-08-16T10:30:00+02:00"],
-     ["2026-08-16", "2026-08-16 10:30:00"]),
+    # STXT-SCHEMA-SPEC 9.4: the grammar of each type is normative; NUMBER is not the JSON number
+    ("NUMBER", ["1", "-1.5", "+1", "1.", ".5", "007", "1e10", "1.2E-3", "+3."], ["abc", "1,5", "", "1e", "e5", "1.2.3"]),
+    # calendar and clock ranges included
+    ("DATE", ["2026-08-21", "2024-02-29", "0000-01-01", "9999-12-31"],
+     ["2026-02-30", "2026-13-01", "2026-00-10", "2026-04-31", "2023-02-29", "2026-8-21", "21-08-2026", "2026-08-21T10:00"]),
+    ("TIME", ["00:00:00", "23:59:59"], ["24:00:00", "10:60:00", "10:00:60", "10:30", "1:30:00", "10:30:00.5", "10:30:00Z"]),
+    ("TIMESTAMP", ["2026-08-21T10:30", "2026-08-21T10:30:00", "2026-08-21T10:30:00.1", "2026-08-21T10:30:00.123456Z",
+                   "2026-08-21T10:30:00+02:00", "2024-02-29T23:59:59-23:59"],
+     ["2026-02-30T10:30", "2026-08-21T24:00", "2026-08-21T10:60:00", "2026-08-21T10:30:00+24:00", "2026-08-21T10:30:00+02:60",
+      "2026-08-21 10:30:00", "2026-08-21", "2026-08-21T10:30:00.", "2026-08-21T10:30:00+0200"]),
     ("UUID", ["123e4567-e89b-12d3-a456-426614174000", "123E4567-E89B-12D3-A456-426614174000"], ["123e4567e89b12d3a456426614174000", "x"]),
     ("EMAIL",
      # STXT-SCHEMA-SPEC 9.4: bare address, or display name followed by the address between angle brackets
@@ -104,11 +109,19 @@ def test_regex_types(type_, good, bad):
 
 # ---------------------------------------------------------------- specific types
 
-def test_url_requires_scheme_and_host():
-    assert codes(inline("URL", "https://stxt.dev/path?q=1")) == []
-    assert codes(inline("URL", "ftp://example.com")) == []
-    for bad in ["stxt.dev", "mailto:ana@example.com", "http://", "not a url", "http://[::1"]:
-        assert codes(inline("URL", bad)) == ["INVALID_VALUE"], bad
+def test_url_follows_the_grammar_of_the_spec():
+    # STXT-SCHEMA-SPEC 9.4: absolute URL, scheme and host mandatory, own grammar (not urllib)
+    good = ["https://stxt.dev", "https://stxt.dev/path/to?q=1&r=2#frag", "HTTP://EXAMPLE.COM/",
+            "http://localhost:8080/", "ftp://user:pw@example.com/dir/", "http://[::1]:80/x",
+            "http://192.168.0.1", "git+ssh://host/repo.git", "https://例え.jp/パス", "http://host?q=1"]
+    bad = ["stxt.dev", "www.stxt.dev/x", "mailto:ana@example.com", "urn:isbn:9780131103627",
+           "tel:+34600000000", "file:///etc/hosts", "http://", "://stxt.dev", "http:/stxt.dev",
+           "1http://stxt.dev", "https://exa mple.com", "https://host:abc", "http://[::1", "http://user@",
+           "https://host/path with space", ""]
+    for value in good:
+        assert codes(inline("URL", value)) == [], value
+    for value in bad:
+        assert codes(inline("URL", value)) == ["INVALID_VALUE"], value
     assert codes(block("URL", "https://stxt.dev")) == ["NOT_ALLOWED_TEXT"]
 
 

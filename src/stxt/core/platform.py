@@ -5,8 +5,6 @@ from __future__ import annotations
 import base64
 import binascii
 import re
-from typing import Optional
-from urllib.parse import SplitResult, urlsplit
 
 _LINE_BREAK = re.compile(r"\r\n|\n")
 _INTEGER = re.compile(r"[-+]?[0-9]+")
@@ -35,21 +33,6 @@ def is_natural(text: str) -> bool:
 def parse_integer(text: str) -> int:
     """Converts ``text`` into an int. Only call it when :func:`is_integer` is true."""
     return int(text)
-
-
-def parse_uri(text: str) -> Optional[SplitResult]:
-    """Parses a URI; ``None`` when it is not valid.
-
-    The result exposes ``scheme`` and ``hostname`` (both empty/None when absent).
-    """
-    try:
-        parts = urlsplit(text)
-        # Force the lazy hostname parsing so an invalid netloc surfaces here
-        parts.hostname  # noqa: B018
-        parts.port  # noqa: B018
-        return parts
-    except ValueError:
-        return None
 
 
 def is_valid_base64(text: str) -> bool:

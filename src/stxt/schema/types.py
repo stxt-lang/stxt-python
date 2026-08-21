@@ -12,10 +12,10 @@ from __future__ import annotations
 
 import re
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Callable, Optional
 
 from ..core.node import InlineNode, Node, TextNode
-from ..core.platform import is_valid_base64, parse_uri
+from ..core.platform import is_valid_base64
 from ..core.string_utils import is_empty
 from ..exceptions import RuntimeException, ValidationException
 from .node_definition import NodeDefinition
@@ -156,12 +156,79 @@ class RegexValue(Type):
 BOOLEAN = RegexValue("BOOLEAN", r"(true|false)", "Invalid boolean")
 NUMBER = RegexValue("NUMBER", r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", "Invalid number")
 INTEGER = RegexValue("INTEGER", r"[-+]?\d+", "Invalid integer")
+# Absolute URL with a mandatory scheme and host, following the grammar of STXT-SCHEMA-SPEC 9.4
+# (scheme "://" [userinfo "@"] host [":" port] ["/" path] ["?" query] ["#" fragment]) and not
+# urllib, so every port accepts exactly the same values: any scheme of the form letter +
+# letters/digits/+/-/., a non-empty host (no TLD required, IPv6 in brackets, non-ASCII kept),
+# no inner blanks, numeric port; mailto:/urn:/file:/// and scheme-less values are rejected.
+URL = RegexValue("URL",
+                 r"[A-Za-z][A-Za-z0-9+.-]*://(?:[^ \t/?#@]+@)?(?:\[[0-9A-Fa-f:.]+\]|[^ \t/?#@:\[\]]+)"
+                 r"(?::[0-9]+)?(?:/[^ \t?#]*)?(?:\?[^ \t#]*)?(?:#[^ \t]*)?",
+                 "Invalid URL")
 NATURAL = RegexValue("NATURAL", r"\d+", "Invalid natural")
-DATE = RegexValue("DATE", r"\d{4}-\d{2}-\d{2}", "Invalid date")
-TIME = RegexValue("TIME", r"\d{2}:\d{2}:\d{2}", "Invalid time")
-TIMESTAMP = RegexValue("TIMESTAMP",
-                       r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{3})?)?(Z|[+-]\d{2}:\d{2})?",
-                       "Invalid timestamp")
+
+
+# ---------------------------------------------------------------- calendar and clock types
+
+def is_valid_date(year: int, month: int, day: int) -> bool:
+    """True if the year-month-day exists in the proleptic Gregorian calendar (year 0000-9999).
+
+    Never ``datetime``: the shape is checked by the regex, the ranges here, like every port.
+    """
+    if month < 1 or month > 12 or day < 1:
+        return False
+    leap = (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
+    days_in_month = (31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+    return day <= days_in_month[month - 1]
+
+
+def is_valid_time(hour: int, minute: int, second: int) -> bool:
+    """True if hour 00-23, minute 00-59, second 00-59 (no leap second)."""
+    return hour <= 23 and minute <= 59 and second <= 59
+
+
+class RangeValue(Type):
+    """A value that must match a pattern and whose groups must then pass a range check
+    (the calendar and clock types of STXT-SCHEMA-SPEC 9.4). INLINE value form only."""
+
+    def __init__(self, name: str, pattern: str, in_range: "Callable[[re.Match[str]], bool]", error: str) -> None:
+        self._name = name
+        self._pattern = re.compile(pattern, re.ASCII)
+        self._in_range = in_range
+        self._error = error
+
+    def get_name(self) -> str:
+        return self._name
+
+    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
+        if node.is_text_node():
+            raise _not_allowed_text(node)
+        value = node.get_text()
+        m = self._pattern.fullmatch(value)
+        if m is None or not self._in_range(m):
+            raise ValidationException(node.get_line(), "INVALID_VALUE",
+                                      f"{node.get_name()}: {self._error} ({value})")
+
+
+def _group(m: "re.Match[str]", i: int, fallback: int = 0) -> int:
+    return fallback if m.group(i) is None else int(m.group(i))
+
+
+# YYYY-MM-DD, an existing date of the proleptic Gregorian calendar
+DATE = RangeValue("DATE", r"(\d{4})-(\d{2})-(\d{2})",
+                  lambda m: is_valid_date(_group(m, 1), _group(m, 2), _group(m, 3)), "Invalid date")
+# hh:mm:ss in range (00-23, 00-59, 00-59); no fraction, no zone
+TIME = RangeValue("TIME", r"(\d{2}):(\d{2}):(\d{2})",
+                  lambda m: is_valid_time(_group(m, 1), _group(m, 2), _group(m, 3)), "Invalid time")
+# DATE "T" hh:mm [":" ss ["." digits]] ["Z" | sign hh:mm]; date, time and offset in range;
+# seconds, fraction (one or more digits) and zone optional
+TIMESTAMP = RangeValue(
+    "TIMESTAMP",
+    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](\d{2}):(\d{2}))?",
+    lambda m: (is_valid_date(_group(m, 1), _group(m, 2), _group(m, 3))
+               and is_valid_time(_group(m, 4), _group(m, 5), _group(m, 6))
+               and (m.group(7) is None or is_valid_time(_group(m, 7), _group(m, 8), 0))),
+    "Invalid timestamp")
 UUID = RegexValue("UUID", r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
                   "Invalid UUID")
 # EMAIL (STXT-SCHEMA-SPEC 9.4): the bare address (user@domain.tld) or a display name followed by
@@ -180,21 +247,6 @@ EMAIL = RegexValue("EMAIL",
 
 
 # ---------------------------------------------------------------- specific types
-
-class URL(Type):
-    """URI with mandatory scheme and host. INLINE value form only."""
-
-    def get_name(self) -> str:
-        return "URL"
-
-    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
-        if node.is_text_node():
-            raise _not_allowed_text(node)
-        url = node.get_text()
-        uri = parse_uri(url)
-        if uri is None or not uri.scheme or not uri.hostname:
-            raise ValidationException(node.get_line(), "INVALID_VALUE", "Invalid URL: " + url)
-
 
 class HEXADECIMAL(Type):
     """Hexadecimal string ``[0-9A-Fa-f]+`` (9.5). INLINE or BLOCK form."""
@@ -268,10 +320,10 @@ class TypeRegistry:
         return list(cls._registry.keys())
 
 
-for _type in (INLINE(), BLOCK(), TEXT(), MARKDOWN(), BOOLEAN, URL(), INTEGER, NATURAL, NUMBER, DATE,
+for _type in (INLINE(), BLOCK(), TEXT(), MARKDOWN(), BOOLEAN, URL, INTEGER, NATURAL, NUMBER, DATE,
               TIME, TIMESTAMP, UUID, EMAIL, HEXADECIMAL(), BINARY(), BASE64(), GROUP(), ENUM()):
     TypeRegistry.register(_type)
 del _type
 
 
-__all__ = ["Type", "TypeRegistry", "RegexValue", "binary_value"]
+__all__ = ["Type", "TypeRegistry", "RegexValue", "RangeValue", "binary_value"]
