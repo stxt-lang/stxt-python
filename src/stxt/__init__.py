@@ -61,7 +61,7 @@ from .template import (
 )
 from .template.template_schema_provider import TEMPLATE_NAMESPACE
 
-__version__ = "0.8.1"
+__version__ = "0.9.0"
 
 __all__ = [
     "__version__",

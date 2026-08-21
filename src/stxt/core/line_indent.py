@@ -47,7 +47,11 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
     * 1 level = 1 TAB or ``TAB_SPACES`` spaces.
     * The indentation of a single line must be homogeneous (only tabs or only spaces);
       mixing both is ``MIXED_INDENTATION``.
-    * Comment lines and empty lines are never an error: their indentation is not validated.
+    * Comment lines are validated like node lines (sections 9 and 11): homogeneous
+      indentation, a multiple of ``TAB_SPACES`` when spaces, and a level of at most
+      ``last_level + 1``. They produce no node and never move the hierarchy (the parser does
+      not update ``last_level`` for them).
+    * Empty lines are never an error: their indentation is not validated.
 
     Args:
         line: the raw source line (without its line break).
@@ -64,6 +68,7 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
     pointer = 0
     saw_space = False
     saw_tab = False
+    is_comment = False
     length = len(line)
 
     while pointer < length:
@@ -82,8 +87,13 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
             spaces = 0
 
         elif c == COMMENT_CHAR:
-            # Comment line: produces no node; its indentation is NOT validated (section 11).
-            return LineIndent(level, line[pointer + 1:], True, False, pointer)
+            # Comment line: produces no node, but its indentation is validated below exactly
+            # like a node's (section 9). Reached only when the line is not block text (a '#'
+            # deeper than an open block is caught as text by the check below, before getting
+            # here), so inside an open block a comment always has indent <= the block node:
+            # the parser closes the block (9.1) and hands the comment to the observers.
+            is_comment = True
+            break
 
         else:
             # First non space/tab/comment character: end of indentation
@@ -122,9 +132,14 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
     if spaces > 0:
         raise ParseException(num_line, "INVALID_NUMBER_SPACES", f"There are {spaces} spaces before node")
 
-    # Validate indentation level progression (no jumps, section 11.3)
+    # Validate indentation level progression (no jumps, section 11.3). Comments included
+    # (section 9): last_level is the level of the last NODE, a comment never becomes the reference.
     if level > last_level + 1:
         raise ParseException(num_line, "INDENTATION_LEVEL_NOT_VALID", f"Level of indent incorrect: {level}")
+
+    # Comment: the text after '#', verbatim
+    if is_comment:
+        return LineIndent(level, line[pointer + 1:], True, False, pointer)
 
     # General case: return the line without the consumed indentation
     # Blank-only trim (section 4): an NBSP after the value is part of it

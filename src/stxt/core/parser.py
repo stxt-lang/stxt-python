@@ -96,8 +96,10 @@ class Parser:
 
             line_indent = parse_line(line_string, last_node_block, last_level, line_number)
 
-            # Comment line: produces no node. A comment at the level of an open block node
-            # (or shallower) closes the block (STXT-SPEC 6.1 and 9.1): a block is a literal
+            # Comment line: produces no node. Its indentation was already validated by
+            # parse_line like a node's (STXT-SPEC 9), but it never becomes the reference
+            # level: last_level is only updated by nodes. A comment at the level of an open
+            # block node (or shallower) closes the block (6.1 and 9.1): a block is a literal
             # and cannot be commented from inside. Only the block closes; the comment does
             # not touch the rest of the hierarchy.
             if line_indent.is_comment:

@@ -114,8 +114,8 @@ def test_jumping_more_than_one_level_is_an_error():
     assert _codes("A: x\n\t\tB: y\n") == ["INDENTATION_LEVEL_NOT_VALID"]
 
 
-def test_indentation_of_comments_and_empty_lines_is_not_validated():
-    docs = Parser().parse("A: x\n\t\t\t# deep comment\n   \n\t\t  # another\n\tB: y\n")
+def test_indentation_of_empty_lines_is_not_validated():
+    docs = Parser().parse("A: x\n   \n\t\t  \n\tB: y\n")
     assert [c.get_name() for c in docs[0].get_children()] == ["B"]
 
 
@@ -195,6 +195,43 @@ def test_a_comment_after_the_last_line_of_a_block_is_still_just_a_comment():
     assert list(root.get_children()[0].get_text_lines()) == ["only"]
 
 
+# ---------------------------------------------------------------- comment indentation (9, 11)
+
+def _first_error(text):
+    return Parser().parse_result(text).get_errors()[0]
+
+
+def test_a_comment_mixing_tabs_and_spaces_is_mixed_indentation():
+    error = _first_error("A: x\n\t  # mixed\n\tB: y\n")
+    assert (error.code, error.line) == ("MIXED_INDENTATION", 2)
+
+
+def test_a_comment_with_spaces_not_multiple_of_four_is_invalid_number_spaces():
+    error = _first_error("A: x\n  # two spaces\n\tB: y\n")
+    assert (error.code, error.line) == ("INVALID_NUMBER_SPACES", 2)
+
+
+def test_a_comment_jumping_more_than_one_level_is_indentation_level_not_valid():
+    error = _first_error("A: x\n\t\t# too deep\n\tB: y\n")
+    assert (error.code, error.line) == ("INDENTATION_LEVEL_NOT_VALID", 2)
+
+
+def test_comments_at_every_reachable_level_are_valid_and_produce_no_node():
+    # Level 0, level 1 and last+1 after a childless node
+    root = _first("# level 0\nRoot:\n\t# level 1\n\tFirst: 1\n\t\t# last + 1, First has no children\n\tSecond: 2\n")
+    assert [c.get_name() for c in root.get_children()] == ["First", "Second"]
+    assert all(isinstance(c, InlineNode) for c in root.get_children())
+
+
+def test_a_node_after_a_level_two_comment_is_checked_against_the_last_node_not_the_comment():
+    # The comment never becomes the reference level: Second is a child of Root
+    root = _first("Root:\n\tFirst: 1\n\t\t# deeper comment\n\tSecond: 2\n")
+    assert [c.get_name() for c in root.get_children()] == ["First", "Second"]
+    # ...and a level-3 node after that comment is still a jump from First (level 1)
+    error = _first_error("Root:\n\tFirst: 1\n\t\t# deeper comment\n\t\t\tThird: 3\n")
+    assert (error.code, error.line) == ("INDENTATION_LEVEL_NOT_VALID", 4)
+
+
 # ---------------------------------------------------------------- multi-error mode
 
 def test_parse_result_collects_every_error_and_keeps_going():
@@ -254,7 +291,7 @@ def test_parse_line_splits_indentation_and_content():
     li = parse_line("\t\tName: value", False, 1, 1)
     assert isinstance(li, LineIndent)
     assert (li.indent_level, li.line_without_indent, li.is_comment, li.is_block, li.indent_length) == (2, "Name: value", False, False, 2)
-    comment = parse_line("  # hi", False, 0, 1)
+    comment = parse_line("\t# hi", False, 0, 1)
     assert comment.is_comment and comment.line_without_indent == " hi"
 
 
