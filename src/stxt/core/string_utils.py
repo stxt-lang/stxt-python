@@ -6,8 +6,22 @@ import re
 import unicodedata
 from typing import Iterable, Optional
 
-_WHITESPACE_RUN = re.compile(r"\s+")
-_SEPARATOR_RUN = re.compile(r"[-_\s]+")
+# STXT-SPEC section 4: a blank is exactly U+0020 or U+0009. Every trim in the core works on
+# these two characters only; ``str.strip()`` and ``\s`` are deliberately avoided because they
+# also remove NBSP, U+3000, U+2028... which STXT treats as content.
+BLANKS = " \t"
+_BLANK_RUN = re.compile(r"[ \t]+")
+_SEPARATOR_RUN = re.compile(r"[-_ \t]+")
+
+
+def is_blank(char: str) -> bool:
+    """True for the two STXT blanks only: space and tab (STXT-SPEC section 4)."""
+    return char == " " or char == "\t"
+
+
+def trim(text: Optional[str]) -> str:
+    """Removes leading and trailing blanks (space and tab only); ``""`` for ``None``."""
+    return (text or "").strip(BLANKS)
 
 
 def normalize_nfc(text: str) -> str:
@@ -16,20 +30,20 @@ def normalize_nfc(text: str) -> str:
 
 
 def compact_spaces(text: Optional[str]) -> str:
-    """Trim + collapse of every inner whitespace run into a single space. Used for node names."""
-    return _WHITESPACE_RUN.sub(" ", (text or "").strip())
+    """Trim + collapse of every inner run of blanks into a single space. Used for node names."""
+    return _BLANK_RUN.sub(" ", trim(text))
 
 
 def normalize_chars(text: Optional[str]) -> str:
     """Canonical node name (STXT-SPEC section 4.3).
 
-    Trim, NFC, lower case, every run of separators (``-``, ``_``, spaces) becomes a single
-    ``-``, and leading/trailing ``-`` are removed. Diacritics and non-Latin letters are kept:
+    Trim (blanks only), NFC, lower case, every run of separators (``-``, ``_``, blanks) becomes
+    a single ``-``, and leading/trailing ``-`` are removed. Diacritics and non-Latin letters are kept:
     ``"Caña" == "caña"`` but ``"Caña" != "Cana"``.
 
     May return the empty string (e.g. for ``"___"``): the caller treats that as an error.
     """
-    value = (text or "").strip()
+    value = trim(text)
     if not value:
         return ""
     value = normalize_nfc(value).lower()
@@ -43,13 +57,14 @@ def lower_case(text: Optional[str]) -> str:
 
 
 def trim_to_not_null(text: Optional[str]) -> str:
-    """``""`` for ``None``; otherwise the text trimmed on both sides."""
-    return (text or "").strip()
+    """``""`` for ``None``; otherwise the text trimmed on both sides (blanks only)."""
+    return trim(text)
 
 
 def right_trim(text: Optional[str]) -> str:
-    """Removes the trailing whitespace of a line only. Used for ``>>`` text block lines."""
-    return (text or "").rstrip()
+    """Removes the trailing blanks (space and tab only) of a line. Used for ``>>`` text block
+    lines (STXT-SPEC section 10.2); a trailing NBSP is kept as content."""
+    return (text or "").rstrip(BLANKS)
 
 
 def is_empty(text: Optional[str]) -> bool:

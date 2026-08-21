@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from ..exceptions import ParseException
 from .constants import COMMENT_CHAR, SPACE, TAB, TAB_SPACES
-from .string_utils import right_trim
+from .string_utils import right_trim, trim
 
 
 class LineIndent:
@@ -33,8 +33,8 @@ class LineIndent:
         self.indent_length = indent_length
 
     def is_empty(self) -> bool:
-        """True if the line has no content beyond whitespace."""
-        return self.line_without_indent.strip() == ""
+        """True if the line has no content beyond blanks (space/tab only, STXT-SPEC section 4)."""
+        return trim(self.line_without_indent) == ""
 
     def __repr__(self) -> str:
         return (f"LineIndent(level={self.indent_level}, content={self.line_without_indent!r}, "
@@ -127,4 +127,5 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
         raise ParseException(num_line, "INDENTATION_LEVEL_NOT_VALID", f"Level of indent incorrect: {level}")
 
     # General case: return the line without the consumed indentation
-    return LineIndent(level, line[pointer:].strip(), False, False, pointer)
+    # Blank-only trim (section 4): an NBSP after the value is part of it
+    return LineIndent(level, trim(line[pointer:]), False, False, pointer)

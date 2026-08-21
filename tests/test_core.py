@@ -256,3 +256,26 @@ def test_parse_line_splits_indentation_and_content():
     assert (li.indent_level, li.line_without_indent, li.is_comment, li.is_block, li.indent_length) == (2, "Name: value", False, False, 2)
     comment = parse_line("  # hi", False, 0, 1)
     assert comment.is_comment and comment.line_without_indent == " hi"
+
+
+# ---------------------------------------------------------------- blanks (4)
+
+def test_blanks_are_only_space_and_tab_so_an_nbsp_is_content():
+    root = _first("Root:\n\tTrailing: Joan \n\tLeading: Joan\n\tOnly: \n\tBlock >>\n\t\tfirst \n\t\t \n\t\tin the middle\n")
+    trailing, leading, only, block = root.get_children()
+    assert trailing.get_value() == "Joan "
+    assert leading.get_value() == " Joan"
+    assert only.get_value() == " "
+    assert list(block.get_text_lines()) == ["first ", " ", "in the middle"]
+
+
+def test_a_line_holding_only_an_nbsp_is_not_empty():
+    assert _codes(" \n") == ["INVALID_LINE"]
+    assert _codes("Block >> \n") == ["INLINE_VALUE_NOT_VALID"]
+    assert _codes("Root: x\n \t\n\n") == []
+
+
+def test_an_nbsp_is_not_trimmed_from_a_name_which_makes_it_invalid():
+    assert _codes("Name : x\n") == ["INVALID_NODE_NAME"]
+    assert _codes("A B: x\n") == ["INVALID_NODE_NAME"]
+    assert _first("Name \t: x\n").get_name() == "Name"

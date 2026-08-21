@@ -23,7 +23,7 @@ from .name_namespace import parse_name_namespace
 from .node import InlineNode, Node, TextNode
 from .parse_result import ParseResult
 from .platform import split_lines
-from .string_utils import remove_utf8_bom
+from .string_utils import remove_utf8_bom, trim
 
 if TYPE_CHECKING:  # pragma: no cover
     from ..processors.observer import Observer
@@ -201,7 +201,7 @@ def create_node(line_indent: LineIndent, line_number: int) -> Node:
         value = line[node_index + len(SEP_NODE):]
 
     # A '>>' node cannot carry significant inline content on the same line (11.4)
-    if is_text_node and value.strip() != "":
+    if is_text_node and trim(value) != "":
         raise ParseException(line_number, "INLINE_VALUE_NOT_VALID", "Line not valid: " + line)
 
     # The namespace the line declares, if any ("" when it inherits)

@@ -7,7 +7,7 @@ from typing import Optional
 
 from ..exceptions import ParseException
 from .constants import EMPTY_NAMESPACE
-from .string_utils import lower_case
+from .string_utils import lower_case, trim
 
 
 class NameNamespace:
@@ -44,7 +44,7 @@ def parse_name_namespace(raw_name: Optional[str], inherited_namespace: Optional[
     if raw_name is None:
         raise ParseException(line_number, "INVALID_LINE", "Line not valid: " + full_line)
 
-    raw_name = raw_name.strip()
+    raw_name = trim(raw_name)
 
     index_open = raw_name.find("(")
     index_close = raw_name.find(")")
@@ -57,7 +57,7 @@ def parse_name_namespace(raw_name: Optional[str], inherited_namespace: Optional[
         if index_open > index_close or index_close != len(raw_name) - 1:
             raise ParseException(line_number, "INVALID_NAMESPACE", "Line not valid: " + full_line)
 
-        name = raw_name[:index_open].strip()
+        name = trim(raw_name[:index_open])
 
         # NO trim here: the grammar does not allow spaces inside '( )', so "( com.example )"
         # must fail the namespace format validation later.
