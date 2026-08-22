@@ -6,7 +6,7 @@ import stxt
 from stxt import (InlineNode, LineIndent, Observer, ParseException, Parser, RuntimeException, SPEC_VERSION,
                   TextNode, ValidationException, parse_line)
 
-from .corpus import find_stxt_web, read
+from .corpus import find_stxt_lang, read
 
 
 def _codes(text):
@@ -308,8 +308,8 @@ def test_spec_version_is_the_version_of_the_specifications():
 
 
 def test_spec_version_equals_the_version_declared_by_stxt_spec():
-    # Tied to Metadata/Version of STXT-SPEC itself (stxt-web/es/stxt-core-ref.stxt).
-    file = find_stxt_web() / "es" / "stxt-core-ref.stxt"
+    # Tied to Metadata/Version of STXT-SPEC itself (stxt-lang/es/stxt-core-ref.stxt).
+    file = find_stxt_lang() / "es" / "stxt-core-ref.stxt"
     root = Parser().parse(read(file))[0]
     version = root.get_child("Metadata").get_child("Version")
     assert version is not None, "STXT-SPEC has no Metadata/Version"

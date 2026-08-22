@@ -1,5 +1,5 @@
 """Writer regression: writing a parsed document and parsing it again must neither lose nor
-change anything, with both indentation styles, over the whole stxt-web corpus."""
+change anything, with both indentation styles, over the whole stxt-lang corpus."""
 
 import pytest
 

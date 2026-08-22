@@ -1,10 +1,10 @@
-"""Helpers for the regression tests against the real corpus in ``../stxt-web``.
+"""Helpers for the regression tests against the real corpus in ``../stxt-lang``.
 
-The corpus is deliberately not copied into this repository: stxt-web is the normative source
+The corpus is deliberately not copied into this repository: stxt-lang is the normative source
 of the language and the tests must fail when the implementation drifts away from the real
 documents, not from a frozen copy.
 
-The corpus is MANDATORY: if ``stxt-web`` cannot be located, the corpus suites fail (they are
+The corpus is MANDATORY: if ``stxt-lang`` cannot be located, the corpus suites fail (they are
 never skipped). Importing this module raises when the corpus is missing, so every suite that
 depends on it fails at collection with a message that explains what is missing.
 """
@@ -16,27 +16,27 @@ from pathlib import Path
 
 from stxt import ParseException, ParseResult, Parser, SchemaValidator, UnifiedSchemaProvider
 
-# Folders of stxt-web holding schemas and templates (they are loaded into the provider).
+# Folders of stxt-lang holding schemas and templates (they are loaded into the provider).
 SCHEMA_DIRS = [".stxt", "examples/definitions"]
 
-# Folders of stxt-web holding documents that must validate against those schemas.
+# Folders of stxt-lang holding documents that must validate against those schemas.
 DOC_DIRS = ["docs", "es", "en"]
 
 
 class CorpusNotFound(Exception):
-    """The mandatory corpus of the sibling project stxt-web was not found."""
+    """The mandatory corpus of the sibling project stxt-lang was not found."""
 
 
-def find_stxt_web() -> Path:
-    """Locates ``stxt-web``: ``STXT_WEB`` if set, otherwise the sibling ``../stxt-web``.
+def find_stxt_lang() -> Path:
+    """Locates ``stxt-lang``: ``STXT_LANG`` if set, otherwise the sibling ``../stxt-lang``.
 
     Raises:
         CorpusNotFound: the corpus is mandatory, never optional.
     """
     candidates = [
-        os.environ.get("STXT_WEB"),
+        os.environ.get("STXT_LANG"),
         # this file is <repo>/tests/corpus.py
-        str(Path(__file__).resolve().parent.parent.parent / "stxt-web"),
+        str(Path(__file__).resolve().parent.parent.parent / "stxt-lang"),
     ]
     for candidate in candidates:
         if candidate and (Path(candidate) / ".stxt").is_dir():
@@ -44,12 +44,12 @@ def find_stxt_web() -> Path:
 
     tried = ", ".join(f'"{c}"' for c in candidates if c)
     raise CorpusNotFound(
-        "The corpus of the sibling project stxt-web is required and was not found. Tried: "
-        + tried + ". Clone stxt-lang/stxt-web next to this repository or set STXT_WEB=/path/to/stxt-web.")
+        "The corpus of the sibling project stxt-lang is required and was not found. Tried: "
+        + tried + ". Clone stxt-lang/stxt-lang next to this repository or set STXT_LANG=/path/to/stxt-lang.")
 
 
-#: Root of stxt-web. Importing this module fails loudly when the corpus is missing.
-STXT_WEB = find_stxt_web()
+#: Root of stxt-lang. Importing this module fails loudly when the corpus is missing.
+STXT_LANG = find_stxt_lang()
 
 
 def find_stxt_files(directory: Path) -> list[Path]:
@@ -60,15 +60,15 @@ def find_stxt_files(directory: Path) -> list[Path]:
 
 
 def corpus_files(dirs: list[str]) -> list[Path]:
-    """The .stxt files of the given folders (relative to the root of stxt-web)."""
+    """The .stxt files of the given folders (relative to the root of stxt-lang)."""
     result: list[Path] = []
     for directory in dirs:
-        result.extend(find_stxt_files(STXT_WEB / directory))
+        result.extend(find_stxt_files(STXT_LANG / directory))
     return result
 
 
 def relative(path: Path) -> str:
-    return str(path.relative_to(STXT_WEB))
+    return str(path.relative_to(STXT_LANG))
 
 
 def read(path: Path) -> str:

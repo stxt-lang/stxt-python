@@ -1,7 +1,7 @@
-"""Validation regression: the real documents of stxt-web must parse with no errors and
-validate with no warnings against the schemas/templates of stxt-web itself.
+"""Validation regression: the real documents of stxt-lang must parse with no errors and
+validate with no warnings against the schemas/templates of stxt-lang itself.
 
-Also the schema <-> template equivalence: one same namespace is described twice in stxt-web,
+Also the schema <-> template equivalence: one same namespace is described twice in stxt-lang,
 as a schema and as a template; both must validate the documents exactly the same way.
 """
 

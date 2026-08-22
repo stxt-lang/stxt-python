@@ -1,4 +1,4 @@
-"""Loading regression: every real schema and template of stxt-web must parse, validate against
+"""Loading regression: every real schema and template of stxt-lang must parse, validate against
 its meta-schema and be transformed into a Schema without exception."""
 
 import pytest

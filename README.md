@@ -278,9 +278,9 @@ pytest
 ```
 
 The tests are regression tests against the real corpus of the sibling repository
-[`stxt-web`](https://github.com/stxt-lang/stxt-web) (the language specifications and their
-examples). The corpus is mandatory: clone `stxt-web` next to this repository, or point at it
-with `STXT_WEB=/path/to/stxt-web`; without it the corpus suites fail, they are never skipped.
+[`stxt-lang`](https://github.com/stxt-lang/stxt-lang) (the language specifications and their
+examples). The corpus is mandatory: clone `stxt-lang` next to this repository, or point at it
+with `STXT_LANG=/path/to/stxt-lang`; without it the corpus suites fail, they are never skipped.
 
 ## License
 
