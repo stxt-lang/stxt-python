@@ -30,7 +30,7 @@ class NodeWriter:
     def to_stxt(node: Node, style: IndentStyle = IndentStyle.TABS) -> str:
         """Serializes a node (along with its children) to STXT text."""
         out: list[str] = []
-        NodeWriter._write_node(out, node, 0, style)
+        NodeWriter._write_node(out, node, 0, style, "")
         return "".join(out)
 
     @staticmethod
@@ -42,16 +42,19 @@ class NodeWriter:
             if not first:
                 out.append("\n")
             first = False
-            NodeWriter._write_node(out, doc, 0, style)
+            NodeWriter._write_node(out, doc, 0, style, "")
         return "".join(out)
 
     @staticmethod
-    def _write_node(out: list[str], n: Node, depth: int, style: IndentStyle) -> None:
+    def _write_node(out: list[str], n: Node, depth: int, style: IndentStyle, parent_ns: str) -> None:
+        """Writes one node and its children in the canonical text form of STXT-TREE-SPEC 11.1.
+        ``parent_ns`` is the effective namespace of the parent, "" for a root: the namespace is
+        declared only where it changes (rule 3), wherever the source declared it."""
         NodeWriter._write_indent(out, depth, style)
 
-        ns = n.get_declared_namespace()
+        ns = n.get_namespace()
         out.append(n.get_name())
-        if not is_empty(ns):
+        if ns != parent_ns:
             out.append(f" ({ns})")
 
         if isinstance(n, TextNode):
@@ -68,7 +71,7 @@ class NodeWriter:
                 out.append(" " + value)
             out.append("\n")
             for child in n.get_children():
-                NodeWriter._write_node(out, child, depth + 1, style)
+                NodeWriter._write_node(out, child, depth + 1, style, ns)
 
     @staticmethod
     def _write_indent(out: list[str], depth: int, style: IndentStyle) -> None:

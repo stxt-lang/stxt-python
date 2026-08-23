@@ -13,6 +13,10 @@ runner like this one.
   code and line (STXT-SCHEMA-SPEC 13.1, STXT-TEMPLATE-SPEC 14.1).
 - ``discovery``: a virtual file system and environment resolve to the expected chain, active
   definitions and resolution errors (STXT-DISCOVERY-SPEC).
+- ``writer``: the root nodes of the input, written in canonical text form, equal the expected
+  text in both styles (STXT-TREE-SPEC 11).
+- ``format``: the input reformatted equals the expected text in both styles, with the expected
+  syntax errors (STXT-TREE-SPEC 12).
 """
 
 import json
@@ -20,8 +24,9 @@ import re
 
 import pytest
 
-from stxt import (DiscoveryResolver, ParseException, Parser, SchemaProviderMemory, SchemaValidator,
-                  TemplateSchemaProviderMemory, ValidationException, to_canonical_json, to_canonical_tree)
+from stxt import (DiscoveryResolver, Formatter, IndentStyle, NodeWriter, ParseException, Parser, SchemaProviderMemory,
+                  SchemaValidator, TemplateSchemaProviderMemory, ValidationException, to_canonical_json,
+                  to_canonical_tree)
 
 from .discovery_memory import FakeEnvironment, MemoryFileSystem
 
@@ -30,6 +35,7 @@ from .corpus import STXT_LANG
 DIRECTORY = STXT_LANG / "conformance"
 MANIFEST = json.loads((DIRECTORY / "manifest.json").read_text(encoding="utf-8"))
 CASES = MANIFEST["cases"]
+STYLES = [("tabs", IndentStyle.TABS), ("spaces", IndentStyle.SPACES_4)]
 
 
 def _read(file):
@@ -77,8 +83,10 @@ def test_lists_every_case_file_and_every_case_exactly_once():
     ids = [c["id"] for c in CASES]
     assert len(ids) == len(set(ids)), "duplicate case ids"
     listed = {c.get("input") for c in CASES}
-    for sub in ("tree", "parse", "validate", "definition-errors"):
+    for sub in ("tree", "parse", "validate", "definition-errors", "format"):
         for file in sorted((DIRECTORY / sub).glob("*.stxt")):
+            if file.name.endswith((".tabs.stxt", ".spaces.stxt")):
+                continue
             assert f"{sub}/{file.name}" in listed, f"{sub}/{file.name} is not in the manifest"
 
 
@@ -126,6 +134,15 @@ def test_case(case):
                 assert actual is None, f"{where}: {actual}"
             else:
                 assert actual == case["error"], where
+    elif case["category"] == "writer":
+        nodes = Parser().parse(text)
+        for key, style in STYLES:
+            assert NodeWriter.to_stxt_docs(nodes, style) == _read(case["expected"][key]), f"{case['id']}: {key}"
+    elif case["category"] == "format":
+        for key, style in STYLES:
+            result = Formatter.format(text, style)
+            assert result.text == _read(case["expected"][key]), f"{case['id']}: {key}"
+            assert [{"code": e.code, "line": e.line} for e in result.errors] == case["errors"], f"{case['id']}: errors with {key}"
     elif case["category"] == "definition-error":
         with pytest.raises((ValidationException, ParseException)) as info:
             _load_definitions([case["input"]], {case["input"]: case["kind"]})
