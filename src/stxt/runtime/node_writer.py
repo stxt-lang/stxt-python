@@ -3,8 +3,8 @@
 
 ROUND-TRIP GUARANTEE: writing a parsed tree and re-parsing the output produces the same
 logical tree. The source text is not preserved verbatim: comments are gone, whitespace is
-normalized and the namespace is written where the node DECLARES it; inherited namespaces are
-implicit.
+normalized and the namespace is written only where it changes from the parent's effective
+namespace (STXT-TREE-SPEC 11.1, rule 3), not where the source declared it.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ class NodeWriter:
     def _write_node(out: list[str], n: Node, depth: int, style: IndentStyle, parent_ns: str) -> None:
         """Writes one node and its children in the canonical text form of STXT-TREE-SPEC 11.1.
         ``parent_ns`` is the effective namespace of the parent, "" for a root: the namespace is
-        declared only where it changes (rule 3), wherever the source declared it."""
+        written only where it changes (rule 3), regardless of where the source declared it."""
         NodeWriter._write_indent(out, depth, style)
 
         ns = n.get_namespace()

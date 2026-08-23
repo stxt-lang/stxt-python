@@ -247,6 +247,20 @@ tree = to_canonical_tree(result.get_nodes())   # the STXT-TREE-SPEC data model (
 json_text = to_canonical_json(result.get_nodes())
 ```
 
+`NodeWriter` re-serializes the tree, so comments and blank lines are gone. To reformat a document
+**keeping everything the author wrote**, use `Formatter`: it rewrites the original text line by
+line — node lines in canonical form, block lines re-indented to their block, comments and blank
+lines kept with their indentation units converted — and reports the syntax errors it met, so the
+caller decides what to do with a document that does not parse.
+
+```python
+from stxt import Formatter, IndentStyle
+
+result = Formatter.format(source, IndentStyle.TABS)
+if not result.errors:
+    path.write_text(result.text, encoding="utf-8")
+```
+
 ## API surface
 
 Everything importable from `stxt`:
@@ -262,7 +276,7 @@ Everything importable from `stxt`:
   `SchemaProviderMeta`, `NodeDefinition`, `ChildDefinition`, `transform_node_to_schema`
 - **Templates** — `TemplateSchemaProviderMemory`, `MetaTemplateSchemaProvider`,
   `transform_template_node_to_schema`
-- **Runtime** — `UnifiedSchemaProvider`, `NodeWriter`, `IndentStyle`,
+- **Runtime** — `UnifiedSchemaProvider`, `NodeWriter`, `IndentStyle`, `Formatter`, `FormatResult`,
   `to_canonical_tree`, `to_canonical_json`
 - **Discovery** — `DiscoveryResolver`, `DiscoveryResult`, `DiscoveryDefinition`,
   `DiscoveryLevel`, `DiscoveryError`, `DiscoveryFileSystem`, `DiscoveryEntry`,
@@ -281,6 +295,10 @@ The tests are regression tests against the real corpus of the sibling repository
 [`stxt-lang`](https://github.com/stxt-lang/stxt-lang) (the language specifications and their
 examples). The corpus is mandatory: clone `stxt-lang` next to this repository, or point at it
 with `STXT_LANG=/path/to/stxt-lang`; without it the corpus suites fail, they are never skipped.
+
+## Conformance
+
+`stxt` implements the five STXT specifications at `SPEC_VERSION` (exposed by the package; the package version is independent) and passes every case of the official conformance kit, [`stxt-lang/conformance`](https://github.com/stxt-lang/stxt-lang/tree/master/conformance), across all its profiles: `core`, `schema`, `template`, `discovery` and `text`. The kit is the same one any other implementation can run, which is what makes the three ports interchangeable. What the 1.0 line freezes, and what it does not, is stated at <https://stxt.dev/lang-stability>.
 
 ## License
 
