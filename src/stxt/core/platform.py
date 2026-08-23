@@ -47,6 +47,10 @@ def is_valid_base64(text: str) -> bool:
     if stripped == "":
         return False
     padded = stripped + "=" * (-len(stripped) % 4)
+    # The padding, when present, must be exactly the one that completes the last quartet
+    # (stxt-impl platform.txt, point 3): "aGVsbG8==" and "aGVsbG8x=" are not valid.
+    if text != stripped and text != padded:
+        return False
     try:
         decoded = base64.b64decode(padded, validate=True)
     except (binascii.Error, ValueError):
