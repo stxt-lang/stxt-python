@@ -30,7 +30,7 @@ STXT-TREE-SPEC §11–12, now normative, in the three ports.
   last quartet, as in the TypeScript and Java ports (`stxt-impl` `platform.txt`, point 3):
   `aGVsbG8==` and `aGVsbG8x=` are now rejected; `aGVsbG8=` and `aGVsbG8` are still valid.
 - Tests: `test_conformance.py` runs the `validate`, `validate-error`, `definition-error` and
-  `discovery` categories of the conformance kit (kit 1.2), 249 cases in all; the in-memory
+  `discovery` categories of the conformance kit (kit 1.0, 276 cases in all); the in-memory
   discovery adapters moved to `tests/discovery_memory.py`, shared with `test_discovery.py`.
 
 ## 0.12.0 - 2026-08-22
