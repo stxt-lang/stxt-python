@@ -11,6 +11,8 @@ runner like this one.
   expected code and line (STXT-SCHEMA-SPEC 13.1).
 - ``definition-error``: loading the input as a schema or a template fails with the expected
   code and line (STXT-SCHEMA-SPEC 13.1, STXT-TEMPLATE-SPEC 14.1).
+- ``discovery``: a virtual file system and environment resolve to the expected chain, active
+  definitions and resolution errors (STXT-DISCOVERY-SPEC).
 """
 
 import json
@@ -18,8 +20,10 @@ import re
 
 import pytest
 
-from stxt import (ParseException, Parser, SchemaProviderMemory, SchemaValidator, TemplateSchemaProviderMemory,
-                  ValidationException, to_canonical_json, to_canonical_tree)
+from stxt import (DiscoveryResolver, ParseException, Parser, SchemaProviderMemory, SchemaValidator,
+                  TemplateSchemaProviderMemory, ValidationException, to_canonical_json, to_canonical_tree)
+
+from .discovery_memory import FakeEnvironment, MemoryFileSystem
 
 from .corpus import STXT_LANG
 
@@ -62,14 +66,38 @@ def test_declares_a_kit_version_and_the_specifications_it_covers():
 def test_lists_every_case_file_and_every_case_exactly_once():
     ids = [c["id"] for c in CASES]
     assert len(ids) == len(set(ids)), "duplicate case ids"
-    listed = {c["input"] for c in CASES}
+    listed = {c.get("input") for c in CASES}
     for sub in ("tree", "parse", "validate", "definition-errors"):
         for file in sorted((DIRECTORY / sub).glob("*.stxt")):
             assert f"{sub}/{file.name}" in listed, f"{sub}/{file.name} is not in the manifest"
 
 
+def _discovery(case):
+    fs = MemoryFileSystem({virtual: _read(real) for virtual, real in case["files"].items()})
+    for directory in case.get("dirs", []):
+        fs.add_empty_dir(directory)
+    env = case["environment"]
+    result = DiscoveryResolver(fs, FakeEnvironment(env["stxtPath"], env["userDir"], env["systemDir"])).resolve(case["documentDir"])
+    expected = case["expected"]
+    assert list(result.get_chain()) == expected["chain"], f"{case['id']}: chain"
+    for namespace, file in expected["active"].items():
+        definition = result.get_definition(namespace)
+        assert (definition.file if definition else None) == file, f"{case['id']}: active definition of {namespace}"
+        assert (result.get_schema(namespace) is not None) == (file is not None), f"{case['id']}: get_schema({namespace})"
+    actual = [{"code": e.code, "file": e.file, "namespace": e.namespace} for e in result.get_errors()]
+    assert len(actual) == len(expected["errors"]), f"{case['id']}: errors {actual}"
+    for e in expected["errors"]:
+        match = next((a for a in actual if a["code"] == e["code"] and e.get("file", a["file"]) == a["file"]
+                      and e.get("namespace", a["namespace"]) == a["namespace"]), None)
+        assert match, f"{case['id']}: missing error {e} in {actual}"
+        actual.remove(match)
+
+
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c["id"])
 def test_case(case):
+    if case["category"] == "discovery":
+        _discovery(case)
+        return
     text = _read(case["input"])
     if case["category"] == "tree":
         nodes = Parser().parse(text)
