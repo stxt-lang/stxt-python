@@ -90,7 +90,9 @@ class Parser:
             last_node = stack[-1] if stack else None
 
             # One open node per level: the top of the stack is at level size - 1
-            last_level = len(stack) - 1 if last_node is not None else 0
+            # With no open node the reference level is -1 (spec 8.3): the first line of the
+            # document, and the first after every node has been closed, must be at level 0.
+            last_level = len(stack) - 1 if last_node is not None else -1
 
             last_node_block = isinstance(last_node, TextNode)
 

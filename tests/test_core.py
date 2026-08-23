@@ -191,7 +191,7 @@ def test_a_shallower_comment_also_closes_the_block_and_nothing_else():
 def test_text_after_a_closing_comment_is_a_parse_error():
     # The de-indented '#' line no longer vanishes silently: the next text line fails
     assert _codes("Root:\n\tBody >>\n\t\tfirst\n\t# oops\n\t\tsecond\n") == ["INDENTATION_LEVEL_NOT_VALID"]
-    assert _codes("Body >>\n\tfirst\n# oops\n\tsecond\n") == ["INVALID_LINE"]
+    assert _codes("Body >>\n\tfirst\n# oops\n\tsecond\n") == ["INDENTATION_LEVEL_NOT_VALID"]
 
 
 def test_a_comment_after_the_last_line_of_a_block_is_still_just_a_comment():

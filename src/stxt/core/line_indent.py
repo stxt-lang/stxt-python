@@ -56,7 +56,7 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
     Args:
         line: the raw source line (without its line break).
         last_node_block: True if the node currently open is a BLOCK (``>>``) node.
-        last_level: level of the node currently open (0 when none).
+        last_level: level of the node currently open (-1 when none).
         num_line: 1-based line number, for the errors.
 
     Raises:
