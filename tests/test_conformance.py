@@ -63,6 +63,16 @@ def test_declares_a_kit_version_and_the_specifications_it_covers():
     assert CASES
 
 
+def test_declares_cumulative_profiles_that_cover_every_category():
+    profiles = MANIFEST["profiles"]
+    covered = set()
+    for name, p in profiles.items():
+        assert "includes" not in p or p["includes"] in profiles, f"profile {name} includes an unknown profile"
+        assert all(s in MANIFEST["specifications"] for s in p["specifications"]), f"profile {name}: unknown specification"
+        covered.update(p["categories"])
+    assert {c["category"] for c in CASES} <= covered
+
+
 def test_lists_every_case_file_and_every_case_exactly_once():
     ids = [c["id"] for c in CASES]
     assert len(ids) == len(set(ids)), "duplicate case ids"
