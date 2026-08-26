@@ -33,8 +33,8 @@ from .discovery import (
     OsDiscoveryFileSystem,
     SystemDiscoveryEnvironment,
 )
-from .exceptions import ParseException, RuntimeException, ValidationException
-from .processors import Observer, Validator
+from .exceptions import LimitException, ParseException, RuntimeException, ValidationException
+from .processors import Observer, StreamObserver, Validator
 from .runtime import (
     Formatter,
     FormatResult,
@@ -64,7 +64,7 @@ from .template import (
 )
 from .template.template_schema_provider import TEMPLATE_NAMESPACE
 
-__version__ = "0.13.0"
+__version__ = "0.14.0"
 
 __all__ = [
     "__version__", "SPEC_VERSION",
@@ -72,9 +72,9 @@ __all__ = [
     "Parser", "ParseResult", "Node", "InlineNode", "TextNode", "NO_LINE", "LineIndent", "parse_line",
     "EMPTY_NAMESPACE",
     # exceptions
-    "ParseException", "ValidationException", "RuntimeException",
+    "ParseException", "ValidationException", "LimitException", "RuntimeException",
     # processors
-    "Observer", "Validator",
+    "Observer", "StreamObserver", "Validator",
     # schema
     "Schema", "SCHEMA_NAMESPACE", "NodeDefinition", "ChildDefinition", "SchemaProvider",
     "SchemaProviderMemory", "SchemaProviderMeta", "SchemaValidator", "transform_node_to_schema",

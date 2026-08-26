@@ -68,6 +68,16 @@ class ValidationException(ParseException):
     """
 
 
+class LimitException(ParseException):
+    """A parser limit exceeded (STXT-SPEC 11.2): nesting depth, line length or input size.
+
+    Unlike any other parse error it aborts the parse: it is emitted and no further input is
+    processed, in every mode, so it is always the last error. Exceeding a limit does not make
+    the document invalid: the same document may parse under higher limits (see the ``max_*``
+    keyword arguments of ``Parser``).
+    """
+
+
 class RuntimeException(Exception):
     """Error that is not tied to a line of the document.
 
@@ -99,4 +109,4 @@ class RuntimeException(Exception):
         return f"{type(self).__name__}({self.code!r}, {self.message!r})"
 
 
-__all__ = ["ParseException", "ValidationException", "RuntimeException"]
+__all__ = ["ParseException", "ValidationException", "LimitException", "RuntimeException"]

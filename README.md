@@ -235,6 +235,38 @@ parser.register_observer(LoggingObserver())
 parser.parse_result(text)
 ```
 
+`StreamObserver` watches the results instead of the process: each completed root node and each
+error, in every mode. With `parse_stream` the parser retains nothing — no nodes, no errors — so
+a file larger than memory can be processed one root tree at a time:
+
+```python
+from stxt import Parser, StreamObserver
+
+class Roots(StreamObserver):
+    def on_root_node(self, node):
+        print("root", node.get_qualified_name())  # one complete root at a time
+
+    def on_error(self, error):
+        print(error)  # "[CODE] line N: message"
+
+parser = Parser()
+parser.register_stream_observer(Roots())
+with open("data.stxt", encoding="utf-8") as f:
+    parser.parse_stream(f)  # any iterable of lines; the trailing "\n" is removed
+```
+
+## Parser limits
+
+The parser rejects hostile or runaway inputs by default (STXT-SPEC §11.2): documents nesting
+more than 100 levels, lines longer than 10 000 characters, or inputs over 10 000 000
+characters. A limit error is a `LimitException` (`LIMIT_NESTING_EXCEEDED`,
+`LIMIT_LINE_LENGTH_EXCEEDED`, `LIMIT_INPUT_SIZE_EXCEEDED`) and aborts the parse: it is always
+the last error reported. Each limit is configurable per parser; `-1` disables it:
+
+```python
+parser = Parser(max_nesting=500, max_input_size=-1)
+```
+
 ## Writing STXT back out, and the canonical tree
 
 ```python
@@ -267,11 +299,11 @@ Everything importable from `stxt`:
 
 - **Parsing** — `Parser`, `ParseResult`, `Node`, `InlineNode`, `TextNode`, `NO_LINE`,
   `LineIndent`, `parse_line`
-- **Exceptions** — `ParseException`, `ValidationException`, `RuntimeException`. Their `message`
-  is only the description; `str(e)` adds the frame: `[CODE] line N: message` (or
-  `[CODE] message` for `RuntimeException`)
+- **Exceptions** — `ParseException`, `ValidationException`, `LimitException`,
+  `RuntimeException`. Their `message` is only the description; `str(e)` adds the frame:
+  `[CODE] line N: message` (or `[CODE] message` for `RuntimeException`)
 - **Versions** — `__version__` (the package) and `SPEC_VERSION` (the specifications it implements)
-- **Extension points** — `Observer`, `Validator`
+- **Extension points** — `Observer`, `StreamObserver`, `Validator`
 - **Schemas** — `Schema`, `SchemaValidator`, `SchemaProvider`, `SchemaProviderMemory`,
   `SchemaProviderMeta`, `NodeDefinition`, `ChildDefinition`, `transform_node_to_schema`
 - **Templates** — `TemplateSchemaProviderMemory`, `MetaTemplateSchemaProvider`,
