@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "stxt"
 version = "0.14.1"
-description = "STXT (Semantic Text) parser, schema/template validator and discovery resolver"
+description = "STXT parser, schema/template validator and discovery resolver"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [{ name = "stxt-lang" }]
-keywords = ["stxt", "semantic text", "parser", "schema", "markup", "human-first"]
+keywords = ["stxt", "parser", "schema", "markup", "human-first"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

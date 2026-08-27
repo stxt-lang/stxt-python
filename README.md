@@ -10,7 +10,7 @@ comes with an optional schema layer so documents can be validated.
 - Website and language reference: <https://stxt.dev>
 - TypeScript implementation: [`@stxt-lang/core`](https://www.npmjs.com/package/@stxt-lang/core) on npm
 - Java implementation: [`dev.stxt:stxt-core`](https://central.sonatype.com/artifact/dev.stxt/stxt-core) on Maven Central
-- VS Code extension: [STXT - Semantic Text](https://marketplace.visualstudio.com/items?itemName=stxt-lang.stxt)
+- VS Code extension: [STXT Language](https://marketplace.visualstudio.com/items?itemName=stxt-lang.stxt)
 
 This package is a port of the language's neutral implementation blueprint (`stxt-impl`), so it
 shares its behaviour, its node model and its error codes with the other implementations.

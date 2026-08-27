@@ -1,4 +1,4 @@
-"""STXT (Semantic Text) for Python: parser, node model, schemas, templates, canonical tree,
+"""STXT for Python: parser, node model, schemas, templates, canonical tree,
 writer and discovery.
 
 The language is defined by the specifications at https://stxt.dev; this package is a port of
