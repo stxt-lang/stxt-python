@@ -3,6 +3,19 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## 0.14.1 - 2026-08-26
+
+Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.14.1.
+
+### Added
+
+- `Formatter.format(text, style, *, max_nesting=..., max_line_length=..., max_input_size=...)`:
+  keyword arguments that configure the limits of the internal parser (STXT-SPEC §11.2; -1
+  disables one). Left out, the recommended defaults apply. A limit exceeded shows up in the
+  errors like any other syntax error, and the lines the aborted parse never described are
+  converted as "other lines" (indentation units only). Needed by tools that expose
+  configurable limits and also reformat, like the CLI and the VS Code extension.
+
 ## 0.14.0 - 2026-08-26
 
 Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.14.0: the parser limits

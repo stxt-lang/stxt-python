@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from ..core.constants import DEFAULT_MAX_INPUT_SIZE, DEFAULT_MAX_LINE_LENGTH, DEFAULT_MAX_NESTING
 from ..core.line_indent import LineIndent
 from ..core.node import InlineNode, Node, TextNode
 from ..core.parser import Parser
@@ -92,12 +93,23 @@ class Formatter:
         raise TypeError("Formatter is a namespace of static methods")
 
     @staticmethod
-    def format(text: str, style: IndentStyle = IndentStyle.TABS) -> FormatResult:
+    def format(text: str, style: IndentStyle = IndentStyle.TABS, *,
+               max_nesting: int = DEFAULT_MAX_NESTING,
+               max_line_length: int = DEFAULT_MAX_LINE_LENGTH,
+               max_input_size: int = DEFAULT_MAX_INPUT_SIZE) -> FormatResult:
         """Formats a document.
 
         Args:
             text: the document.
             style: indentation style to format with; tabs by default.
+
+        Keyword Args:
+            max_nesting: limits for the internal parser (STXT-SPEC 11.2); every one left out
+                keeps its recommended default, and -1 disables one. A limit exceeded shows up
+                in the errors like any other syntax error, and the lines the aborted parse
+                never described are converted as "other lines" (indentation units only).
+            max_line_length: see ``max_nesting``.
+            max_input_size: see ``max_nesting``.
 
         Returns:
             the formatted text and the syntax errors found; see :class:`FormatResult`.
@@ -107,7 +119,8 @@ class Formatter:
             text = text[1:]
 
         source_lines = _SourceLines()
-        parser = Parser()
+        parser = Parser(max_nesting=max_nesting, max_line_length=max_line_length,
+                        max_input_size=max_input_size)
         parser.register_observer(source_lines)
         result = parser.parse_result(text)
 

@@ -293,6 +293,10 @@ if not result.errors:
     path.write_text(result.text, encoding="utf-8")
 ```
 
+`Formatter.format` takes the same limits as the parser as keyword arguments —
+`Formatter.format(source, IndentStyle.TABS, max_input_size=-1)` — since formatting parses the
+document with them (STXT-SPEC §11.2).
+
 ## API surface
 
 Everything importable from `stxt`:

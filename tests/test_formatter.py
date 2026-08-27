@@ -125,3 +125,26 @@ def test_reports_the_errors_and_converts_only_the_units_of_the_lines_the_tree_do
     still = Formatter.format("Doc:   x\n    Hijo:y\n\t\t\t\tJump: z")
     assert len(still.errors) == 1
     assert still.text == "Doc: x\n\tHijo: y\n\t\t\t\tJump: z"
+
+
+class TestFormatterParserLimits:
+    """The optional limit kwargs of Formatter.format (STXT-SPEC 11.2)."""
+
+    def test_default_limits_apply(self) -> None:
+        result = Formatter.format("Name: " + "x" * 10000 + "\n")
+
+        assert [e.code for e in result.errors] == ["LIMIT_LINE_LENGTH_EXCEEDED"]
+
+    def test_minus_one_disables_a_limit(self) -> None:
+        text = "Name: " + "x" * 10000 + "\n"
+        result = Formatter.format(text, IndentStyle.TABS, max_line_length=-1)
+
+        assert result.errors == []
+        assert result.text == text
+
+    def test_after_an_abort_undescribed_lines_are_unit_converted_only(self) -> None:
+        text = "A: 1\n    B: " + "y" * 30 + "\n    C: 3\n"
+        result = Formatter.format(text, IndentStyle.TABS, max_line_length=20)
+
+        assert [e.code for e in result.errors] == ["LIMIT_LINE_LENGTH_EXCEEDED"]
+        assert result.text == "A: 1\n\tB: " + "y" * 30 + "\n\tC: 3\n"
