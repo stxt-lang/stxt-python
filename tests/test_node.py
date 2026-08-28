@@ -61,6 +61,20 @@ def test_a_text_node_splits_at_lf_and_crlf_and_keeps_a_trailing_empty_line():
     assert list(TextNode("T", text=["a"], namespace="com.x.y").get_text_lines()) == ["a"]
 
 
+def test_remove_trailing_empty_lines_drops_the_final_empty_lines_and_nothing_else():
+    text = TextNode("Body", ["", "a", "", "b", "", ""])
+    text.remove_trailing_empty_lines()
+    assert list(text.get_text_lines()) == ["", "a", "", "b"]
+
+    blank = TextNode("Blank", ["", ""])
+    blank.remove_trailing_empty_lines()
+    assert list(blank.get_text_lines()) == []
+
+    empty = TextNode("Empty")
+    empty.remove_trailing_empty_lines()
+    assert list(empty.get_text_lines()) == []
+
+
 # ---------------------------------------------------------------- parent links
 
 def test_add_child_links_both_ends_and_derives_the_level():
@@ -294,7 +308,7 @@ def test_a_tree_built_by_code_writes_and_reparses_to_the_same_canonical_tree():
     doc.add_inline_node("From", "ana@example.com")
     to = doc.add_inline_node("To")
     to.add_inline_node("Address", "bob@example.com")
-    doc.add_text_node("Body", "Hi Bob,\n\nSee attached.\n")
+    doc.add_text_node("Body", "Hi Bob,\n\nSee attached.")
     doc.add_inline_node("Cc", "org.other.ns", "x")
 
     written = NodeWriter.to_stxt(doc)

@@ -59,8 +59,14 @@ class NodeWriter:
 
         if isinstance(n, TextNode):
             out.append(" >>\n")
-            # Block lines are written one level deeper than the node
-            for text_line in n.get_text_lines():
+            # Block lines are written one level deeper than the node. Final empty lines are
+            # not emitted (STXT-TREE-SPEC 11.1 rule 6): parsing never produces them
+            # (STXT-SPEC 10.3), and on a programmatically built node they would not survive
+            # the round trip.
+            lines = list(n.get_text_lines())
+            while lines and lines[-1] == "":
+                lines.pop()
+            for text_line in lines:
                 NodeWriter._write_indent(out, depth + 1, style)
                 out.append(text_line + "\n")
         else:

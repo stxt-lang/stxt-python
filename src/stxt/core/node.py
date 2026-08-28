@@ -350,6 +350,14 @@ class TextNode(Node):
     def clear_text(self) -> None:
         self._lines = []
 
+    def remove_trailing_empty_lines(self) -> None:
+        """Removes the final empty lines (``""`` elements at the end of the lines). The parser
+        calls it when the block closes (STXT-SPEC 10.3: the final empty lines of a block are
+        not content); it is public because a programmatically built node may want the same
+        normalization before writing."""
+        while self._lines and self._lines[-1] == "":
+            self._lines.pop()
+
     def get_text(self) -> str:
         return "\n".join(self._lines)
 

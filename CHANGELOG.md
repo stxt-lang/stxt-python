@@ -3,6 +3,31 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## 0.15.0 - 2026-08-27
+
+Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.15.0: the final empty
+lines of a block are no longer content (STXT-SPEC §10.3).
+
+### Changed
+
+- **Language change (STXT-SPEC §10.3).** The final empty lines of a `>>` block — the sequence
+  of empty lines after its last non-empty line — are discarded when the block closes, whether
+  a shallower line closes it or the document ends. They were visual separation (or an editor's
+  final line breaks), not content: two visually identical documents now produce the same tree.
+  Leading and intermediate empty lines are kept, and an empty line still never closes a block.
+  A block whose lines are all blank is now as empty as a block with no lines.
+- `NodeWriter` does not emit the final empty lines of a block (STXT-TREE-SPEC §11.1 rule 6):
+  parsing never produces them, and on a programmatically built node they would not survive the
+  round trip. This also makes the canonical text of several roots round-trip exactly: the blank
+  line the writer puts between roots no longer grows the previous block on re-parse.
+- `Formatter` writes the final blank lines of a block as plain blank lines (STXT-TREE-SPEC
+  §12.1 rule 3), no longer indented to the block level: they are not content.
+
+### Added
+
+- `TextNode.remove_trailing_empty_lines()`: removes the `""` elements at the end of the lines.
+  The parser calls it when a block closes; it is public for programmatically built nodes.
+
 ## 0.14.1 - 2026-08-26
 
 Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.14.1.

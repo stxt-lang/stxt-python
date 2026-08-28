@@ -3,7 +3,7 @@ change anything, with both indentation styles, over the whole stxt-lang corpus."
 
 import pytest
 
-from stxt import IndentStyle, NodeWriter, Parser, to_canonical_tree
+from stxt import IndentStyle, InlineNode, NodeWriter, Parser, to_canonical_tree
 
 from .corpus import DOC_DIRS, SCHEMA_DIRS, corpus_files, describe_errors, read, relative
 
@@ -46,4 +46,12 @@ def test_writes_a_subtree_as_a_root_declaring_its_namespace():
 def test_writes_an_empty_block_line_as_the_indentation_alone():
     nodes = Parser().parse("Doc:\n\tBody >>\n\t\tfirst\n\n\t\tlast\n\t\t\n")
     assert NodeWriter.to_stxt_docs(nodes, IndentStyle.SPACES_4) == (
-        "Doc:\n    Body >>\n        first\n        \n        last\n        \n")
+        "Doc:\n    Body >>\n        first\n        \n        last\n")
+
+
+def test_does_not_write_the_final_empty_lines_of_a_programmatically_built_block():
+    # Parsing never produces them (STXT-SPEC 10.3); on a built node they would not
+    # survive the round trip, so the writer drops them (STXT-TREE-SPEC 11.1 rule 6).
+    doc = InlineNode("Doc")
+    doc.add_text_node("Body", "first\n\nlast\n\n")
+    assert NodeWriter.to_stxt(doc) == "Doc:\n\tBody >>\n\t\tfirst\n\t\t\n\t\tlast\n"

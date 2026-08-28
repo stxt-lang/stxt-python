@@ -14,8 +14,10 @@ The rules, the same for every tool of the ecosystem:
   value — or `` >>`` for a block.
 - A **text line of a block** gets the indentation of the block (its level plus one) in the
   requested style, followed by its content; any indentation the line had beyond the block's is
-  content (STXT-SPEC 10.2) and is kept exactly. A blank line of the block is ``""`` in the
-  content (STXT-SPEC 10.3), so it is written with the indentation of the block too.
+  content (STXT-SPEC 10.2) and is kept exactly. A blank line that precedes more block text is
+  ``""`` in the content (STXT-SPEC 10.3), so it is written with the indentation of the block
+  too. The final blank lines of a block are not content (STXT-SPEC 10.3: the parser drops them
+  when the block closes) and fall under the next rule.
 - Every **other line** — a comment, a blank line outside a block, or a line the parse tree does
   not describe because of a syntax error — is kept as the author wrote it, except that its
   trailing blanks are removed and the whole indentation units at its start are converted one
@@ -63,6 +65,7 @@ class FormatResult:
 class _TextLine:
     node: TextNode
     line: LineIndent
+    index: int
 
 
 class _SourceLines(Observer):
@@ -83,7 +86,10 @@ class _SourceLines(Observer):
         pass  # every line that opens no node is treated alike
 
     def on_text_line(self, node: TextNode, line_number: int, line_string: str, line_indent: LineIndent) -> None:
-        self.text_by_line[line_number] = _TextLine(node, line_indent)
+        # The line was just appended: its 0-based index in the block is the current last.
+        # After the block closes and drops its final empty lines (STXT-SPEC 10.3), an index
+        # beyond get_text_lines() marks the line as a final empty line, not content.
+        self.text_by_line[line_number] = _TextLine(node, line_indent, len(node.get_text_lines()) - 1)
 
 
 class Formatter:
@@ -135,8 +141,11 @@ class Formatter:
         node = source_lines.node_by_line.get(line_number)
         if node is not None:
             return Formatter._render_node(node, line, style)
+        # A final empty line of a block is not content (STXT-SPEC 10.3): the parser removed it
+        # from the node when the block closed, so its index falls beyond the logical lines. It
+        # is kept as any other line: blank, unindented.
         text = source_lines.text_by_line.get(line_number)
-        if text is not None:
+        if text is not None and text.index < len(text.node.get_text_lines()):
             return Formatter._indent(text.node.get_level() + 1, style) + text.line.line_without_indent
         return Formatter._convert_units(right_trim(line), style)
 

@@ -241,6 +241,13 @@ class Parser:
         while len(stack) > target_level:
             completed = stack.pop()
 
+            # A closing block node drops its final empty lines (STXT-SPEC 10.3): they are not
+            # content, only visual separation or an editor's final line breaks. The validators
+            # and observers below already see the trimmed node; on_text_line did fire for
+            # these lines while the block was open, as process observation of the source.
+            if isinstance(completed, TextNode):
+                completed.remove_trailing_empty_lines()
+
             # Validators return errors, they do not throw
             for validator in self._validators:
                 try:

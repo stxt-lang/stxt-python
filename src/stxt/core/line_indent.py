@@ -106,7 +106,7 @@ def parse_line(line: str, last_node_block: bool, last_level: int, num_line: int)
             text = right_trim(line[pointer + 1:])
 
             # The prefix covering the block level must be homogeneous (10.2 rule 1).
-            # Empty lines are always preserved and exempt from the check (10.3).
+            # Empty lines are never an error and are exempt from the check (10.3).
             if saw_space and saw_tab and len(text) > 0:
                 raise ParseException(num_line, "INDENTATION_MIXED", "Mixed tabs and spaces in indentation")
 

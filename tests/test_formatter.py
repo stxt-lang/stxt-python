@@ -16,9 +16,9 @@ def canonical(text):
 MESSY = "\n".join(["# top comment", "Documento (test.fmt):   ", "    # indented comment", "    Titulo:Hello   ", "",
                    "\tCuerpo >>", "\t\tfirst line", "", "\t\t    indented content", "\t\t\t\t", "\tAfter (test.fmt): block", ""])
 MESSY_TABS = "\n".join(["# top comment", "Documento (test.fmt):", "\t# indented comment", "\tTitulo: Hello", "",
-                        "\tCuerpo >>", "\t\tfirst line", "\t\t", "\t\t    indented content", "\t\t", "\tAfter (test.fmt): block", ""])
+                        "\tCuerpo >>", "\t\tfirst line", "\t\t", "\t\t    indented content", "", "\tAfter (test.fmt): block", ""])
 MESSY_SPACES = "\n".join(["# top comment", "Documento (test.fmt):", "    # indented comment", "    Titulo: Hello", "",
-                          "    Cuerpo >>", "        first line", "        ", "            indented content", "        ",
+                          "    Cuerpo >>", "        first line", "        ", "            indented content", "",
                           "    After (test.fmt): block", ""])
 
 
@@ -55,17 +55,20 @@ def test_reindents_block_lines_keeping_their_own_extra_indentation():
     assert fmt("Doc >>\n\tuna línea\n\t\tsangrada", SPACES_4) == "Doc >>\n    una línea\n    \tsangrada"
 
 
-def test_indents_the_blank_lines_of_a_block_to_the_level_of_the_block():
+def test_indents_the_blank_lines_of_a_block_before_more_text_final_ones_stay_plain():
+    # STXT-SPEC 10.3: a blank line before more block text gets the block's indentation;
+    # the final blank lines of a block are not content and stay plain.
     assert fmt("Doc >>\n\tuna\n\n\t\t\t\n\totra") == "Doc >>\n\tuna\n\t\n\t\n\totra"
     assert fmt("Doc >>\n\tuna\n\n\totra", SPACES_4) == "Doc >>\n    una\n    \n    otra"
-    assert fmt("Doc >>\n\tuna\n\t\t\t") == "Doc >>\n\tuna\n\t"
+    assert fmt("Doc >>\n\tuna\n\t\t\t") == "Doc >>\n\tuna\n"
+    assert fmt("Doc >>\n\tuna\n\t\t\t\nOtro: x") == "Doc >>\n\tuna\n\nOtro: x"
     assert fmt("Padre:\n\tHijo: v\n\t\n\tOtro: w") == "Padre:\n\tHijo: v\n\n\tOtro: w"
 
 
 def test_keeps_the_text_of_the_block_byte_identical():
     text = "Doc >>\n\tuna\n\n\t\t  dos\n\t\t\t"
     block = lambda t: Parser().parse(t)[0].get_text()
-    assert block(text) == "una\n\n\t  dos\n"
+    assert block(text) == "una\n\n\t  dos"
     assert block(fmt(text)) == block(text)
     assert block(fmt(text, SPACES_4)) == block(text)
 

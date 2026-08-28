@@ -387,3 +387,45 @@ def test_an_nbsp_is_not_trimmed_from_a_name_which_makes_it_invalid():
     assert _codes("Name : x\n") == ["INVALID_NODE_NAME"]
     assert _codes("A B: x\n") == ["INVALID_NODE_NAME"]
     assert _first("Name \t: x\n").get_name() == "Name"
+
+
+# ---------------------------------------------------------------- final empty lines (10.3)
+
+def _block_lines(text):
+    return list(_first(text).get_text_lines())
+
+
+def test_drops_the_final_empty_lines_at_eof_whatever_the_final_line_breaks():
+    assert _block_lines("B >>\n\ttext") == ["text"]
+    assert _block_lines("B >>\n\ttext\n") == ["text"]
+    assert _block_lines("B >>\n\ttext\n\n") == ["text"]
+    assert _block_lines("B >>\n\ttext\n\n\t\t\n\n") == ["text"]
+
+
+def test_drops_the_final_empty_lines_when_a_shallower_line_closes_the_block():
+    roots = Parser().parse("B >>\n\ttext\n\n\t\nC: x\n")
+    assert list(roots[0].get_text_lines()) == ["text"]
+    assert roots[1].get_name() == "C"
+
+
+def test_keeps_leading_and_intermediate_empty_lines():
+    assert _block_lines("B >>\n\n\ttext\n\n\tmore\n\n") == ["", "text", "", "more"]
+
+
+def test_a_block_of_only_empty_lines_is_as_empty_as_a_block_with_no_lines():
+    assert _block_lines("B >>\n") == []
+    assert _block_lines("B >>\n\t\n") == []
+    assert _block_lines("B >>\n\n\n") == []
+
+
+def test_still_notifies_the_observers_of_every_physical_line_of_the_block():
+    seen = []
+
+    class _Counter(Observer):
+        def on_text_line(self, node, line_number, line_string, line_indent):
+            seen.append(line_number)
+
+    parser = Parser()
+    parser.register_observer(_Counter())
+    parser.parse("B >>\n\ttext\n\n\n")
+    assert seen == [2, 3, 4]
