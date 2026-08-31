@@ -13,8 +13,6 @@ from ..schema.schema_provider import SchemaProvider, SchemaProviderMemory
 from ..schema.schema_validator import SchemaValidator
 from .template_parser import TEMPLATE_NAMESPACE, transform_template_node_to_schema
 
-#: Namespace of the template language itself.
-
 # The meta-template of the template language itself, embedded verbatim: STXT-TEMPLATE-SPEC 16.
 META_TEXT = """Template (@stxt.template): @stxt.template
 	Structure >>

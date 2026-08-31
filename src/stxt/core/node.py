@@ -1,4 +1,4 @@
-"""The node model of the STXT tree (``stxt-impl/core/node.txt``, model 0.7.0).
+"""The node model of the STXT tree (``stxt-impl/core/node.txt``).
 
 :class:`Node` is abstract, with exactly two concrete forms (a closed hierarchy):
 

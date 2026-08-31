@@ -294,7 +294,7 @@ class BASE64(Type):
 # ---------------------------------------------------------------- registry
 
 class TypeRegistry:
-    """Registry of the supported types (the 18 of STXT-SCHEMA-SPEC), by name."""
+    """Registry of the supported types (the 19 of STXT-SCHEMA-SPEC), by name."""
 
     _registry: dict[str, Type] = {}
 
