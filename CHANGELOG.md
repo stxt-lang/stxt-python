@@ -3,6 +3,19 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## 1.0.0 - 2026-08-31
+
+**First stable release.** Functionally identical to 0.17.0: the number is the promise, not a
+change. Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 1.0.0.
+
+From this release on, the 1.x line freezes what
+[stxt.dev/lang-stability](https://stxt.dev/lang-stability) states: the language (STXT-SPEC 1.0,
+exposed as `SPEC_VERSION`), the canonical tree, the stable error codes and the public in-memory
+API of this package. Error message texts and convenience facades may still evolve. The package
+passes every case of the official conformance kit
+([stxt-lang/conformance](https://github.com/stxt-lang/stxt-lang/tree/master/conformance)) in
+all five profiles.
+
 ## 0.17.0 - 2026-08-31
 
 Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.17.0: the parity fixes
