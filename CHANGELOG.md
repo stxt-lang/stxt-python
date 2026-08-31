@@ -3,7 +3,11 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
-## Unreleased
+## 0.16.0 - 2026-08-31
+
+Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.16.0: the fixes of the
+ports security audit, one shared definition-loading pipeline, and error parity between the
+ports. No language changes.
 
 ### Security
 
@@ -18,6 +22,35 @@ language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
   so the descent cannot be lured into a symlink loop or an unrelated tree. A symlink to a
   regular file is still listed as a file. `OSError` from `scandir`/`is_dir` is caught rather
   than propagated. (`read_file` still follows symlinks; out of scope for this change.)
+
+### Changed
+
+- Every definition-loading pipeline (the in-memory providers, `UnifiedSchemaProvider` and
+  discovery) now validates against the meta-schema and transforms through one internal module,
+  `stxt/schema/definition_compiler.py` (mirror of `stxt-impl/schema/definition_compiler.txt`),
+  and each meta-schema is compiled once per process. No API change.
+
+### Added
+
+- `ParseException.NO_LINE` (0) names the line an error reports when it does not belong to one
+  source line (a definition duplicated across roots, for example). The value does not change —
+  those errors already reported 0, and the conformance kit asserts it. (`node.NO_LINE`, -1, is
+  unrelated: it marks nodes built programmatically, never errors.)
+
+### Fixed
+
+- Template `Structure` lines are parsed with the language's blanks only (`[ \t]` in the
+  pattern plus `trim`), never `\s`, which is Unicode in Python: an NBSP after the cardinality
+  or inside the type name is content, so such lines now fail with `CARDINALITY_NOT_VALID` /
+  `TYPE_NOT_VALID` exactly as the other ports do (TEMPLATE-SPEC §6.2/§9, new NBSP tests equal
+  in the three ports).
+
+### Removed
+
+- The `META_SCHEMA_NOT_AVAILABLE` error code (it guarded a state that cannot be reached), and
+  the unreachable duplicate of the empty-namespace check in `SchemaProviderMemory` (the parser
+  already reports `SCHEMA_NAMESPACE_EMPTY`).
+- `string_utils.is_blank`, dead code with no counterpart in the `stxt-impl` mirror.
 
 ## 0.15.0 - 2026-08-27
 
