@@ -162,6 +162,24 @@ class Node(ABC):
         return f"{type(self).__name__}({self._name}{ns})"
 
 
+def _apply_positional_args(args: tuple[Any, ...], signature: str, content: Any,
+                           namespace: Optional[str], line: int) -> tuple[Any, Optional[str], int]:
+    """Emulates the ``(name[, [namespace, ]content[, line]])`` overloads shared by
+    :class:`InlineNode` and :class:`TextNode`: with two strings the second is always the
+    content, and the namespace only exists in the three-argument form. Positional arguments
+    override the keyword defaults; ``signature`` is the message of the ``TypeError`` raised
+    on too many of them."""
+    if len(args) == 1:
+        (content,) = args
+    elif len(args) == 2:
+        namespace, content = args
+    elif len(args) == 3:
+        namespace, content, line = args
+    elif len(args) > 3:
+        raise TypeError(signature)
+    return content, namespace, line
+
+
 class InlineNode(Node):
     """``Name: value``: an optional inline value and an ordered list of children.
 
@@ -180,14 +198,8 @@ class InlineNode(Node):
 
     def __init__(self, name: str, *args: Any, value: Optional[str] = None,
                  namespace: Optional[str] = None, line: int = NO_LINE) -> None:
-        if len(args) == 1:
-            (value,) = args
-        elif len(args) == 2:
-            namespace, value = args
-        elif len(args) == 3:
-            namespace, value, line = args
-        elif len(args) > 3:
-            raise TypeError("InlineNode(name[, [namespace, ]value[, line]])")
+        value, namespace, line = _apply_positional_args(
+            args, "InlineNode(name[, [namespace, ]value[, line]])", value, namespace, line)
         self._value = ""
         self._children: list[Node] = []
         super().__init__(name, namespace, line)
@@ -315,14 +327,8 @@ class TextNode(Node):
 
     def __init__(self, name: str, *args: Any, text: Union[str, Iterable[str], None] = None,
                  namespace: Optional[str] = None, line: int = NO_LINE) -> None:
-        if len(args) == 1:
-            (text,) = args
-        elif len(args) == 2:
-            namespace, text = args
-        elif len(args) == 3:
-            namespace, text, line = args
-        elif len(args) > 3:
-            raise TypeError("TextNode(name[, [namespace, ]text[, line]])")
+        text, namespace, line = _apply_positional_args(
+            args, "TextNode(name[, [namespace, ]text[, line]])", text, namespace, line)
         self._lines: list[str] = []
         super().__init__(name, namespace, line)
         self.set_text(text)

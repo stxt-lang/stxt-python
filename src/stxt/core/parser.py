@@ -23,7 +23,7 @@ emitted: the nodes still open are not closed nor notified.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from ..exceptions import LimitException, ParseException
 from .constants import (
@@ -120,7 +120,7 @@ class Parser:
         removed, so a file object opened in text mode works as it is."""
         self._parse_lines((_without_line_break(line) for line in lines), None)
 
-    def _parse_lines(self, lines: Iterable[str], result: ParseResult | None) -> None:
+    def _parse_lines(self, lines: Iterable[str], result: Optional[ParseResult]) -> None:
         # Shared traversal. With a result, roots and errors are collected into it
         # (parse/parse_result); with None, nothing is retained (parse_stream). Either way
         # every registered callback fires the same.
@@ -147,17 +147,17 @@ class Parser:
                     f"Input larger than {self._max_input_size} characters"), result)
                 return
 
-            try:
-                self._process_line(line, line_number, stack, result)
-            except LimitException as le:
-                self._emit_error(le, result)
-                return
+            if not self._process_line(line, line_number, stack, result):
+                return  # a limit aborted the parse; its error is already emitted
 
         # Close every node still open at EOF
         self._close_to_level(stack, 0, result)
 
     def _process_line(self, line_string: str, line_number: int, stack: list[Node],
-                      result: ParseResult | None) -> None:
+                      result: Optional[ParseResult]) -> bool:
+        # Processes one source line. Errors of this line are collected into the result and
+        # the traversal continues with the next line: returns True to keep going, False when
+        # a limit aborted the parse (its error is already emitted) -- _parse_lines stops on it.
         try:
             last_node = stack[-1] if stack else None
 
@@ -181,7 +181,7 @@ class Parser:
                     self._close_to_level(stack, len(stack) - 1, result)
                 for observer in self._observers:
                     observer.on_comment(line_number, line_string)
-                return
+                return True
 
             # Text line of an open BLOCK node: append it instead of creating a node
             if line_indent.is_block:
@@ -190,11 +190,11 @@ class Parser:
                 text_node.add_text_line(line_indent.line_without_indent)
                 for observer in self._observers:
                     observer.on_text_line(text_node, line_number, line_string, line_indent)
-                return
+                return True
 
             # Empty lines outside a block are ignored
             if line_indent.is_empty():
-                return
+                return True
 
             current_level = line_indent.indent_level
 
@@ -202,8 +202,10 @@ class Parser:
             # and block text lines returned above; with the consecutive-level rule this
             # triggers exactly when the first node at level max_nesting opens.
             if self._max_nesting != -1 and current_level >= self._max_nesting:
-                raise LimitException(line_number, "LIMIT_NESTING_EXCEEDED",
-                                     f"Nesting deeper than {self._max_nesting} levels")
+                self._emit_error(LimitException(
+                    line_number, "LIMIT_NESTING_EXCEEDED",
+                    f"Nesting deeper than {self._max_nesting} levels"), result)
+                return False
 
             # Close nodes down to the current level (finalizes them)
             self._close_to_level(stack, current_level, result)
@@ -224,15 +226,15 @@ class Parser:
 
             stack.append(node)
 
-        except LimitException:
-            raise
         except ParseException as pe:
             self._emit_error(pe, result)
         except Exception as e:  # noqa: BLE001 - unexpected platform error, collected
             self._emit_error(ParseException(line_number, "UNEXPECTED_ERROR", str(e)), result)
 
+        return True
+
     def _close_to_level(self, stack: list[Node], target_level: int,
-                        result: ParseResult | None) -> None:
+                        result: Optional[ParseResult]) -> None:
         # Closes every node deeper than target_level: runs the validators over it and
         # notifies the observers. (The node was attached to its parent when created.) When
         # the node closed is a root -- the stack is left empty -- the stream observers
@@ -270,7 +272,7 @@ class Parser:
                 if result is not None:
                     result.add_node(completed)
 
-    def _emit_error(self, error: ParseException, result: ParseResult | None) -> None:
+    def _emit_error(self, error: ParseException, result: Optional[ParseResult]) -> None:
         # Every error goes through here: collected into the result when there is one, and
         # notified to the stream observers always, in order of appearance.
         if result is not None:

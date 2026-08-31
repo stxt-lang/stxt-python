@@ -13,20 +13,20 @@ from .string_utils import lower_case, trim
 class NameNamespace:
     """The name and the (lower-cased) namespace read from a node line."""
 
-    __slots__ = ("name", "namespace")
+    __slots__ = ("_name", "_namespace")
 
     def __init__(self, name: str, namespace: str) -> None:
-        self.name = name
-        self.namespace = namespace
+        self._name = name
+        self._namespace = namespace
 
     def get_name(self) -> str:
-        return self.name
+        return self._name
 
     def get_namespace(self) -> str:
-        return self.namespace
+        return self._namespace
 
     def __repr__(self) -> str:
-        return f"NameNamespace({self.name!r}, {self.namespace!r})"
+        return f"NameNamespace({self._name!r}, {self._namespace!r})"
 
 
 def parse_name_namespace(raw_name: Optional[str], inherited_namespace: Optional[str],

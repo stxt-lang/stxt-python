@@ -14,11 +14,6 @@ _BLANK_RUN = re.compile(r"[ \t]+")
 _SEPARATOR_RUN = re.compile(r"[-_ \t]+")
 
 
-def is_blank(char: str) -> bool:
-    """True for the two STXT blanks only: space and tab (STXT-SPEC section 4)."""
-    return char == " " or char == "\t"
-
-
 def trim(text: Optional[str]) -> str:
     """Removes leading and trailing blanks (space and tab only); ``""`` for ``None``."""
     return (text or "").strip(BLANKS)
