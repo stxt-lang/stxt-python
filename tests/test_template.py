@@ -153,6 +153,11 @@ def _template_error(structure_lines, description_lines=None):
     (["Root: (2,1)"], "MIN_GREATER_THAN_MAX"),
     (["Root: (1,2,3)"], "CARDINALITY_NOT_VALID"),
     (["Root: (-1)"], "CARDINALITY_NOT_VALID"),
+    # bounded to 2^32 - 1 (TEMPLATE-SPEC 7.1); the bound itself is legal (tested below)
+    (["Root: (4294967296)"], "CARDINALITY_NOT_VALID"),
+    (["Root: (0,4294967296)"], "CARDINALITY_NOT_VALID"),
+    (["Root: (4294967296+)"], "CARDINALITY_NOT_VALID"),
+    (["Root: (4294967296-)"], "CARDINALITY_NOT_VALID"),
     (["Root: FOO"], "TYPE_NOT_VALID"),
     (["Root: ENUM"], "VALUES_REQUIRED"),
     (["Root: ENUM []"], "VALUES_REQUIRED"),
@@ -176,6 +181,12 @@ def _template_error(structure_lines, description_lines=None):
 ])
 def test_template_structure_errors(lines, code):
     assert _template_error(lines).code == code
+
+
+def test_template_cardinality_bound_itself_is_legal():
+    # TEMPLATE-SPEC 7.1: 4294967295 = 2^32 - 1 is the last legal cardinality number
+    text = "Template (@stxt.template): com.example.t\n\tStructure >>\n\t\tRoot: (4294967295) TEXT\n"
+    TemplateSchemaProviderMemory().add_template(text)
 
 
 @pytest.mark.parametrize("lines,code", [

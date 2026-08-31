@@ -91,13 +91,20 @@ def test_enum_is_case_sensitive_and_inline_only():
       "2026-08-21 10:30:00", "2026-08-21", "2026-08-21T10:30:00.", "2026-08-21T10:30:00+0200"]),
     ("UUID", ["123e4567-e89b-12d3-a456-426614174000", "123E4567-E89B-12D3-A456-426614174000"], ["123e4567e89b12d3a456426614174000", "x"]),
     ("EMAIL",
-     # STXT-SCHEMA-SPEC 9.4: bare address, or display name followed by the address between angle brackets
-     ["ana@example.com", "a.b+c@sub.example.org", "Ana García <ana@example.com>", "Ana<ana@example.com>",
+     # STXT-SCHEMA-SPEC 9.4: bare address, or display name followed by the address between angle
+     # brackets; permissive dots (no RFC 5322 dot-atom) and the RFC 5321 practical length limits
+     ["ana@example.com", "a.b+c@sub.example.org", "a..b@example.com", ".ana@example.com",
+      "a!#$%&'*+/=?^_`{|}~-@x.co", "a" * 64 + "@example.com", "ana@example." + "a" * 63,
+      "Ana García <ana@example.com>", "Ana<ana@example.com>",
       "Ana García   <ana@example.com>", '"García, Ana" <ana@example.com>'],
-     # the bracketed form needs a name, balanced brackets, a valid address and nothing after
-     ["ana@", "@example.com", "ana@localhost", "a b@example.com", "<ana@example.com>", "   <ana@example.com>",
+     # the bracketed form needs a name, balanced brackets, a valid address and nothing after;
+     # ASCII only (no EAI), no digits in the TLD, and one over each length limit fails
+     ["ana@", "@example.com", "ana@localhost", "a b@example.com", "josé@example.com", "ana@example.c0m",
+      "a" * 65 + "@example.com", "ana@example." + "a" * 64,
+      "<ana@example.com>", "   <ana@example.com>",
       "Ana <ana@>", "Ana <ana@localhost>", "Ana <ana@example.com", "Ana ana@example.com>", "Ana ana@example.com",
-      "Ana <ana@example.com> extra", "Ana <ana@example.com> <ana@example.com>", "Ana <<ana@example.com>>"]),
+      "Ana <ana@example.com> extra", "Ana <ana@example.com> <ana@example.com>", "Ana <<ana@example.com>>",
+      "Ana < ana@example.com >"]),
 ])
 def test_regex_types(type_, good, bad):
     for value in good:
@@ -211,6 +218,8 @@ def test_closed_content_model_and_cardinalities():
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n\t\tValues:\n\t\t\tValue: x\n\t\t\tValue:\n", "VALUE_EMPTY"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tType: ENUM\n\t\tValues:\n\t\t\tValue: \t \n", "VALUE_EMPTY"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\t\tMin: 2\n\t\t\t\tMax: 1\n\tNode: B\n", "MIN_GREATER_THAN_MAX"),
+    # cardinalities are bounded to 2^32 - 1 (SCHEMA-SPEC 10)
+    ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\t\tMax: 4294967296\n\tNode: B\n", "CARDINALITY_NOT_VALID"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: Missing\n", "CHILD_NOT_DEFINED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\tNode: a\n", "NODE_DUPLICATED"),
     ("Schema (@stxt.schema): com.example.x\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\tChild: b\n\tNode: B\n", "CHILD_DUPLICATED"),
@@ -224,6 +233,12 @@ def test_schema_errors(text, code):
     with pytest.raises(Exception) as info:
         SchemaProviderMemory().add_schema(text)
     assert getattr(info.value, "code", None) == code, repr(info.value)
+
+
+def test_schema_cardinality_bound_itself_is_legal():
+    # SCHEMA-SPEC 10: 4294967295 = 2^32 - 1 is the last legal Min/Max value
+    SchemaProviderMemory().add_schema(
+        "Schema (@stxt.schema): com.example.bound\n\tNode: A\n\t\tChildren:\n\t\t\tChild: B\n\t\t\t\tMax: 4294967295\n\tNode: B\n")
 
 
 GROUP_SCHEMA = """Schema (@stxt.schema): com.example.group

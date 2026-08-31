@@ -3,6 +3,31 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## 0.17.0 - 2026-08-31
+
+Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.17.0: the parity fixes
+of the external spec review (IANA/media-type pass). The specifications stay at 1.0 — they
+gained a normative `EMAIL` grammar, a cardinality bound and a strict-UTF-8 read rule without
+changing the meaning of any valid document.
+
+### Changed
+
+- **`EMAIL` follows the normative grammar of STXT-SCHEMA-SPEC §9.4**, now spelled out in the
+  specification instead of implied by the implementations: ASCII only (no EAI), permissive
+  dots (no RFC 5322 dot-atom), local part 1-64 characters, whole address at most 254, TLD
+  2-63 letters, and the display-name form separated by STXT blanks only (`[ \t]`, never
+  `\s`). The previous regex enforced ad-hoc limits (256 total, a 63/63 domain split) that no
+  spec text backed.
+- **Cardinalities are bounded to `4294967295` (2^32 - 1)** (STXT-SCHEMA-SPEC §10,
+  STXT-TEMPLATE-SPEC §7.1): a `Min`/`Max` or template number above the bound is
+  `CARDINALITY_NOT_VALID` in every port. Before, this port accepted arbitrary values (Python
+  integers are unbounded) while Java rejected anything above 2^31 - 1 — the same schema
+  loaded in one port and failed in another. New `stxt.core.constants.MAX_CARDINALITY`.
+- **Strict UTF-8 reads stated as the contract** (STXT-SPEC §3): the discovery adapter
+  already opened files in Python's default strict mode; that is now the normative behaviour
+  (invalid UTF-8 is a read error, never a silent U+FFFD substitution), so it must not be
+  relaxed with `errors="replace"`.
+
 ## 0.16.0 - 2026-08-31
 
 Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.16.0: the fixes of the

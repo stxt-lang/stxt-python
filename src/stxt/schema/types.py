@@ -229,18 +229,22 @@ TIMESTAMP = RangeValue(
     "Invalid timestamp")
 UUID = RegexValue("UUID", r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
                   "Invalid UUID")
-# EMAIL (STXT-SCHEMA-SPEC 9.4): the bare address (user@domain.tld) or a display name followed by
-# the address between angle brackets (Joan Costa <joan@example.com>). The display name is any
-# non-empty text without '<' or '>' (quotes are not interpreted) and the space before '<' is
-# optional; '<'/'>' without a name, unbalanced or followed by anything are rejected.
-# The address proper, local@domain with the usual length limits, as it reads when it ends the value...
-_EMAIL_ADDRESS = (r"(?=.{1,256}$)(?=.{1,64}@.{1,255}$)(?=.{1,64}@.{1,63}\..{1,63}$)"
-                  r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+# EMAIL, per the normative grammar of STXT-SCHEMA-SPEC 9.4: the bare address (user@domain.tld)
+# or a display name followed by the address between angle brackets (Joan Costa <joan@example.com>).
+# The display name is any non-empty text without '<' or '>' (quotes are not interpreted) whose
+# last character is not a blank, and the blank before '<' is optional; '<'/'>' without a name,
+# unbalanced or followed by anything are rejected. ASCII only (no EAI), permissive with dots (the
+# full RFC 5322 dot-atom is not replicated), RFC 5321 practical length limits: local part 1-64,
+# whole address at most 254, TLD 2-63 letters. Blanks are the STXT ones (U+0020/U+0009) only, so
+# no \s here.
+# The address proper, local@domain per the normative grammar, as it reads when it ends the value...
+_EMAIL_ADDRESS = (r"(?=.{1,254}$)(?=[^@]{1,64}@)"
+                  r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}")
 # ...and the same address as it reads between '<' and '>' (the lookaheads stop at the '>').
-_EMAIL_BRACKETED = (r"(?=[^>]{1,256}>$)(?=[^>]{1,64}@[^>]{1,255}>$)(?=[^>]{1,64}@[^>]{1,63}\.[^>]{1,63}>$)"
-                    r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_EMAIL_BRACKETED = (r"(?=[^>]{1,254}>$)(?=[^@>]{1,64}@)"
+                    r"[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}")
 EMAIL = RegexValue("EMAIL",
-                   r"(?:[^<>]*[^<>\s]\s*<" + _EMAIL_BRACKETED + r">|" + _EMAIL_ADDRESS + r")",
+                   r"(?:[^<>]*[^<> \t][ \t]*<" + _EMAIL_BRACKETED + r">|" + _EMAIL_ADDRESS + r")",
                    "Invalid email")
 
 

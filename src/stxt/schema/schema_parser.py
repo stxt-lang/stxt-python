@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from ..core.constants import MAX_CARDINALITY
 from ..core.name_namespace import parse_name_namespace
 from ..core.node import InlineNode, Node
 from ..core.platform import is_integer, parse_integer
@@ -153,7 +154,12 @@ def _get_integer(node: InlineNode, child_name: str) -> Optional[int]:
         return None
     if not is_integer(n.get_text()):
         raise ValidationException(node.get_line(), "CARDINALITY_NOT_VALID", "Integer not valid: " + n.get_text())
-    return parse_integer(n.get_text())
+    value = parse_integer(n.get_text())
+    # Cardinalities are bounded to 2^32 - 1 (STXT-SCHEMA-SPEC 10)
+    if value > MAX_CARDINALITY:
+        raise ValidationException(node.get_line(), "CARDINALITY_NOT_VALID",
+                                  f"Cardinality above {MAX_CARDINALITY}: " + n.get_text())
+    return value
 
 
 __all__ = ["transform_node_to_schema"]

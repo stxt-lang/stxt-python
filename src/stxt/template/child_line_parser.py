@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import re
 
+from ..core.constants import MAX_CARDINALITY
 from ..core.platform import is_natural, parse_integer
 from ..core.string_utils import trim
 from ..exceptions import ValidationException
@@ -105,10 +106,14 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
 
 
 def _parse_count(num: str, count: str, raw_line: str, line_number: int) -> int:
-    # num, min and max must be NON-NEGATIVE integers, with no trailing text (7.1)
+    # num, min and max must be NON-NEGATIVE integers, with no trailing text, bounded to
+    # 2^32 - 1 like Min/Max in a schema (7.1)
     if not is_natural(num):
         raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
-    return parse_integer(num)
+    value = parse_integer(num)
+    if value > MAX_CARDINALITY:
+        raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
+    return value
 
 
 __all__ = ["parse_child_line", "CHILD_LINE_PATTERN"]
