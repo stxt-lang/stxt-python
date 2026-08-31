@@ -4,7 +4,15 @@ and the resolution errors of section 8."""
 
 import os
 
-from stxt import DiscoveryError, DiscoveryResolver, OsDiscoveryFileSystem, SystemDiscoveryEnvironment
+import pytest
+
+from stxt import (
+    DiscoveryEntry,
+    DiscoveryError,
+    DiscoveryResolver,
+    OsDiscoveryFileSystem,
+    SystemDiscoveryEnvironment,
+)
 
 from .discovery_memory import FakeEnvironment, MemoryFileSystem
 
@@ -233,6 +241,77 @@ class TestDiscoveryResultAsSchemaProvider:
         resolver.clear_cache()
         third = resolver.resolve("/repo")
         assert third.get_schema("com.acme.changed") is not None, "reload after clear_cache sees the change"
+
+
+class TestBoundedAndTolerantDescent:
+    """The recursive descent inside a resolution directory must terminate and tolerate listing
+    failures (STXT-DISCOVERY-SPEC §3, §10): a symlink loop, a pathologically deep tree or a
+    directory that cannot be listed must never turn resolution into unbounded recursion or an
+    escaping exception."""
+
+    def test_a_self_listing_directory_cycle_resolves_without_recursion_error(self):
+        # An in-memory file system whose 'loop' subdirectory lists itself forever. Without the
+        # depth bound, the descent would recurse until RecursionError.
+        class CyclicFileSystem(MemoryFileSystem):
+            def list_directory(self, path):
+                if path == "/defs/loop":
+                    return [DiscoveryEntry("/defs/loop", "loop", True)]
+                return super().list_directory(path)
+
+        fs = CyclicFileSystem({
+            "/defs/good.stxt": template("com.acme.good", "Good"),
+            "/defs/loop/placeholder": "",
+        })
+        result = DiscoveryResolver(fs, FakeEnvironment(["/defs"])).resolve("/anywhere")
+        # It terminates and still loads the legitimate definition found before/around the loop.
+        assert result.get_schema("com.acme.good") is not None
+
+    def test_a_pathologically_deep_tree_stops_at_the_descent_limit(self):
+        # A chain of nested directories deeper than DEFAULT_MAX_DESCENT (32). A file below the
+        # limit is never reached; a file above it is.
+        files = {"/defs/near.stxt": template("com.acme.near", "Near")}
+        deep = "/defs" + "/d" * 40 + "/far.stxt"
+        files[deep] = template("com.acme.far", "Far")
+        fs = MemoryFileSystem(files)
+        result = DiscoveryResolver(fs, FakeEnvironment(["/defs"])).resolve("/anywhere")
+        assert result.get_schema("com.acme.near") is not None
+        assert result.get_schema("com.acme.far") is None, "the too-deep file is beyond the descent limit"
+
+    def test_a_subdirectory_that_cannot_be_listed_is_tolerated(self):
+        # list_directory raises OSError for one subdirectory; resolve() must not propagate it and
+        # the rest of the level must still load.
+        class PartlyUnreadableFileSystem(MemoryFileSystem):
+            def list_directory(self, path):
+                if path == "/defs/secret":
+                    raise PermissionError(path)
+                return super().list_directory(path)
+
+        fs = PartlyUnreadableFileSystem({
+            "/defs/good.stxt": template("com.acme.good", "Good"),
+            "/defs/secret/hidden.stxt": template("com.acme.hidden", "Hidden"),
+        })
+        result = DiscoveryResolver(fs, FakeEnvironment(["/defs"])).resolve("/anywhere")  # must not raise
+        assert result.get_schema("com.acme.good") is not None
+        assert result.get_schema("com.acme.hidden") is None, "the unreadable subtree contributes nothing"
+
+    def test_os_file_system_does_not_follow_a_real_directory_symlink_loop(self, tmp_path):
+        stxt_dir = tmp_path / "project" / ".stxt"
+        stxt_dir.mkdir(parents=True)
+        (stxt_dir / "a.stxt").write_text(template("com.acme.a", "A"), encoding="utf-8")
+
+        loop = stxt_dir / "loop"
+        try:
+            os.symlink(stxt_dir, loop, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("the operating system does not allow creating symbolic links")
+
+        fs = OsDiscoveryFileSystem()
+        # The symlink-to-directory is omitted from the listing, so the descent never enters it.
+        listed = fs.list_directory(str(stxt_dir))
+        assert not any(e.name == "loop" and e.is_directory for e in listed)
+
+        result = DiscoveryResolver(fs, FakeEnvironment()).resolve(str(tmp_path / "project"))  # must terminate
+        assert result.get_definition("com.acme.a").file == str(stxt_dir / "a.stxt")
 
 
 class TestHostAdapters:

@@ -3,6 +3,22 @@
 All notable changes to the `stxt` Python package. The version number announces the same
 language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
 
+## Unreleased
+
+### Security
+
+- **Bounded, tolerant discovery descent that does not follow directory symlinks**
+  (STXT-DISCOVERY-SPEC §3, §10). The recursive descent inside a resolution directory
+  (`DiscoveryResolver._collect_files`) is now bounded by an internal `DEFAULT_MAX_DESCENT`
+  (32) and tolerant of listing failures: a subtree that reaches the depth limit or whose
+  `list_directory` raises simply contributes no files, so a deep nesting or a symlink loop no
+  longer causes a `RecursionError`, and a file-system error no longer escapes `resolve()`.
+- `OsDiscoveryFileSystem.list_directory` no longer follows directory symbolic links: a symlink
+  that points to a directory is omitted from the listing (`entry.is_dir(follow_symlinks=False)`),
+  so the descent cannot be lured into a symlink loop or an unrelated tree. A symlink to a
+  regular file is still listed as a file. `OSError` from `scandir`/`is_dir` is caught rather
+  than propagated. (`read_file` still follows symlinks; out of scope for this change.)
+
 ## 0.15.0 - 2026-08-27
 
 Same number and scope as `@stxt-lang/core` and `dev.stxt:stxt-core` 0.15.0: the final empty

@@ -31,6 +31,11 @@ STXT_DIR = ".stxt"
 STXT_EXTENSION = ".stxt"
 #: Default maximum number of ancestor directories examined during the project-level ascent
 DEFAULT_MAX_ASCENT = 32
+#: Default maximum depth of the recursive descent inside a resolution directory. A safeguard
+#: against symlink loops and pathological trees, analogous to the ascent limit (DISCOVERY-SPEC
+#: §3, §10); the descent stops at this depth instead of recursing without bound. Internal: it is
+#: not exposed in the constructor nor in the public API.
+DEFAULT_MAX_DESCENT = 32
 
 
 class DiscoveryResolver:
@@ -114,11 +119,29 @@ class DiscoveryResolver:
 
     def _collect_files(self, directory: str) -> list[str]:
         # Every file under a directory, recursively, SORTED BY PATH so that results and error
-        # messages do not depend on the listing order of the file system.
+        # messages do not depend on the listing order of the file system. The descent is bounded
+        # by DEFAULT_MAX_DESCENT and tolerant of listing failures (DISCOVERY-SPEC §3, §10): a
+        # subdirectory that reaches the depth limit or cannot be listed simply contributes no
+        # files, never an exception. Together with adapters that do not follow directory symlinks,
+        # this stops symlink loops and pathological trees from turning resolution into unbounded
+        # recursion or an escaping exception.
+        return self._collect_files_at(directory, 0)
+
+    def _collect_files_at(self, directory: str, depth: int) -> list[str]:
         files: list[str] = []
-        for entry in _sort_by_path(self._fs.list_directory(directory)):
+
+        # Safeguard against symlink loops and pathological trees (§10): stop descending.
+        if depth >= DEFAULT_MAX_DESCENT:
+            return files
+
+        try:
+            entries = _sort_by_path(self._fs.list_directory(directory))
+        except Exception:  # noqa: BLE001 - a directory that cannot be listed contributes no files (§3)
+            return files
+
+        for entry in entries:
             if entry.is_directory:
-                files.extend(self._collect_files(entry.path))
+                files.extend(self._collect_files_at(entry.path, depth + 1))
             else:
                 files.append(entry.path)
         return files

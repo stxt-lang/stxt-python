@@ -56,8 +56,33 @@ class OsDiscoveryFileSystem(DiscoveryFileSystem):
             return False
 
     def list_directory(self, path: str) -> list[DiscoveryEntry]:
-        with os.scandir(path) as it:
-            return [DiscoveryEntry(entry.path, entry.name, entry.is_dir()) for entry in it]
+        # Directory symbolic links are NOT followed (DISCOVERY-SPEC §3, §10): a symlink that
+        # points to a directory is omitted from the listing, so the resolver's recursive descent
+        # cannot be lured into a symlink loop or into an unrelated tree. A symlink to a regular
+        # file is still listed as a file. OSError from scandir/is_dir (an ELOOP or a directory
+        # that cannot be read) is tolerated here — never propagated — even though the resolver
+        # also tolerates it per-directory.
+        entries: list[DiscoveryEntry] = []
+        try:
+            with os.scandir(path) as it:
+                for entry in it:
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            # A real directory: recurse into it.
+                            entries.append(DiscoveryEntry(entry.path, entry.name, True))
+                        elif entry.is_dir(follow_symlinks=True):
+                            # A symlink pointing to a directory: omit it entirely, so the descent
+                            # is never lured into a loop or an unrelated tree.
+                            continue
+                        else:
+                            # A regular file, or a symlink to a regular file: listed as a file.
+                            entries.append(DiscoveryEntry(entry.path, entry.name, False))
+                    except OSError:
+                        # A broken or looping symlink: treat as a plain, non-recursed entry.
+                        entries.append(DiscoveryEntry(entry.path, entry.name, False))
+        except OSError:
+            return []
+        return entries
 
     def read_file(self, path: str) -> str:
         with open(path, encoding="utf-8") as f:
