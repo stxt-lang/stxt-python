@@ -178,6 +178,17 @@ def test_template_structure_errors(lines, code):
     assert _template_error(lines).code == code
 
 
+@pytest.mark.parametrize("lines,code", [
+    # A NON-ASCII blank (NBSP, U+00A0) is content, not a blank (TEMPLATE-SPEC 6.2/9): it must
+    # NOT be trimmed. Around the type it becomes part of the type name (unknown => TYPE_NOT_VALID),
+    # never parsed as a plain "(1) TEXT"; inside a cardinality it makes the count non-numeric.
+    (["Root: (1) TEXT"], "TYPE_NOT_VALID"),
+    (["Root: ( 1)"], "CARDINALITY_NOT_VALID"),
+])
+def test_non_ascii_blanks_are_not_trimmed(lines, code):
+    assert _template_error(lines).code == code
+
+
 @pytest.mark.parametrize("description,code", [
     (["Missing: x"], "DESCRIPTION_NODE_NOT_FOUND"),
     (["Root: x", "Root: y"], "DESCRIPTION_DUPLICATED"),

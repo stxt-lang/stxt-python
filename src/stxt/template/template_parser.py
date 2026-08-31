@@ -14,7 +14,7 @@ from typing import Optional
 
 from ..core.node import InlineNode, Node
 from ..core.parser import Parser
-from ..core.string_utils import is_empty, lower_case, normalize_chars
+from ..core.string_utils import is_empty, lower_case, normalize_chars, trim
 from ..core.validations import NAMESPACE_FORMAT
 from ..exceptions import ParseException, ValidationException
 from ..schema.child_definition import ChildDefinition
@@ -101,7 +101,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
     # no ENUM values and no children (6.4, 10 and 14.15).
     if namespace != schema.get_namespace():
         type_ = cl.get_type()
-        if type_ is not None and type_.strip() != "":
+        if type_ is not None and trim(type_) != "":
             raise ValidationException(node.get_line(), "TYPE_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
                                       "Not allowed type definition in external namespaces")
         if cl.get_values() is not None:
@@ -156,7 +156,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
             raise ValidationException(node.get_line(), "REFERENCE_REQUIRED",
                                       "Multiple node reference must start with @: " + node.get_name())
 
-        reference = type_[1:].strip()
+        reference = trim(type_[1:])
 
         # Reference and explicit type on the same line (14.13)
         explicit_type = _reference_type(reference, node.get_canonical_name())
@@ -212,7 +212,7 @@ def _reference_type(reference: str, normalized_name: str) -> Optional[str]:
     cut = reference.rfind(" ")
     if cut < 0:
         return None
-    candidate = reference[cut + 1:].strip()
+    candidate = trim(reference[cut + 1:])
     rest = reference[:cut]
     if TypeRegistry.get(candidate) is not None and normalize_chars(rest) == normalized_name:
         return candidate
