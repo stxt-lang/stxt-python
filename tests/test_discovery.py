@@ -313,6 +313,29 @@ class TestBoundedAndTolerantDescent:
         result = DiscoveryResolver(fs, FakeEnvironment()).resolve(str(tmp_path / "project"))  # must terminate
         assert result.get_definition("com.acme.a").file == str(stxt_dir / "a.stxt")
 
+    def test_os_file_system_does_not_follow_a_file_symlink(self, tmp_path):
+        stxt_dir = tmp_path / "project" / ".stxt"
+        stxt_dir.mkdir(parents=True)
+        (stxt_dir / "a.stxt").write_text(template("com.acme.a", "A"), encoding="utf-8")
+
+        # A file outside the .stxt/, and a .stxt entry symlinked to it: it must never be read.
+        secret = tmp_path / "secret.stxt"
+        secret.write_text("SECRET-CONTENT-that-must-never-be-read", encoding="utf-8")
+        link = stxt_dir / "leak.stxt"
+        try:
+            os.symlink(secret, link)
+        except (OSError, NotImplementedError):
+            pytest.skip("the operating system does not allow creating symbolic links")
+
+        fs = OsDiscoveryFileSystem()
+        # The file symlink is omitted from the listing, so the outside file is never read.
+        assert not any(e.name == "leak.stxt" for e in fs.list_directory(str(stxt_dir)))
+
+        result = DiscoveryResolver(fs, FakeEnvironment()).resolve(str(tmp_path / "project"))
+        assert result.get_definition("com.acme.a").file == str(stxt_dir / "a.stxt")
+        assert result.get_schema("com.acme.leak") is None
+        assert all("SECRET-CONTENT" not in e.message for e in result.get_errors())
+
 
 class TestHostAdapters:
     def test_os_file_system_over_a_real_directory(self, tmp_path):
