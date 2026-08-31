@@ -38,7 +38,7 @@ from ..core.constants import DEFAULT_MAX_INPUT_SIZE, DEFAULT_MAX_LINE_LENGTH, DE
 from ..core.line_indent import LineIndent
 from ..core.node import InlineNode, Node, TextNode
 from ..core.parser import Parser
-from ..core.string_utils import right_trim
+from ..core.string_utils import remove_utf8_bom, right_trim
 from ..exceptions import ParseException
 from ..processors.observer import Observer
 from .node_writer import IndentStyle
@@ -121,8 +121,7 @@ class Formatter:
             the formatted text and the syntax errors found; see :class:`FormatResult`.
         """
         # STXT-TREE-SPEC 12.1: an initial BOM is not kept
-        if text.startswith("﻿"):
-            text = text[1:]
+        text = remove_utf8_bom(text)
 
         source_lines = _SourceLines()
         parser = Parser(max_nesting=max_nesting, max_line_length=max_line_length,

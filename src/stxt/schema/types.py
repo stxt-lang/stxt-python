@@ -104,16 +104,13 @@ class TEXT(Type):
                                       f"Not allowed children nodes in node {node.get_qualified_name()}")
 
 
-class MARKDOWN(Type):
-    """Markdown content (9.7). For validation it is equivalent to TEXT: only children are forbidden."""
+class MARKDOWN(TEXT):
+    """Markdown content (9.7). For validation it is equivalent to TEXT (any content is valid
+    Markdown; only children are forbidden), so it inherits the validation and only the name
+    differs."""
 
     def get_name(self) -> str:
         return "MARKDOWN"
-
-    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
-        if isinstance(node, InlineNode) and len(node.get_children()) > 0:
-            raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED",
-                                      f"Not allowed children nodes in node {node.get_qualified_name()}")
 
 
 class ENUM(Type):
@@ -249,34 +246,29 @@ EMAIL = RegexValue("EMAIL",
 
 # ---------------------------------------------------------------- specific types
 
-class HEXADECIMAL(Type):
-    """Hexadecimal string ``[0-9A-Fa-f]+`` (9.5). INLINE or BLOCK form."""
+class BinaryString(Type):
+    """Base class for the binary string types (9.5), in the style of :class:`RegexValue`:
+    INLINE or BLOCK form; blanks are removed by :func:`binary_value` and the remaining
+    value is checked against a pattern."""
 
-    _PATTERN = re.compile(r"[0-9A-Fa-f]+")
+    def __init__(self, name: str, pattern: str, error: str) -> None:
+        self._name = name
+        self._pattern = re.compile(pattern)
+        self._error = error
 
     def get_name(self) -> str:
-        return "HEXADECIMAL"
+        return self._name
 
     def validate(self, ns_node: NodeDefinition, node: Node) -> None:
         value = binary_value(node)
-        if self._PATTERN.fullmatch(value) is None:
+        if self._pattern.fullmatch(value) is None:
             raise ValidationException(node.get_line(), "INVALID_VALUE",
-                                      f"{node.get_name()}: Invalid hexadecimal ({value})")
+                                      f"{node.get_name()}: {self._error} ({value})")
 
 
-class BINARY(Type):
-    """String of zeros and ones ``[01]+`` (9.5). INLINE or BLOCK form."""
-
-    _PATTERN = re.compile(r"[01]+")
-
-    def get_name(self) -> str:
-        return "BINARY"
-
-    def validate(self, ns_node: NodeDefinition, node: Node) -> None:
-        value = binary_value(node)
-        if self._PATTERN.fullmatch(value) is None:
-            raise ValidationException(node.get_line(), "INVALID_VALUE",
-                                      f"{node.get_name()}: Invalid binary ({value})")
+# Hexadecimal string [0-9A-Fa-f]+ and string of zeros and ones [01]+ (9.5)
+HEXADECIMAL = BinaryString("HEXADECIMAL", r"[0-9A-Fa-f]+", "Invalid hexadecimal")
+BINARY = BinaryString("BINARY", r"[01]+", "Invalid binary")
 
 
 class BASE64(Type):
@@ -322,9 +314,9 @@ class TypeRegistry:
 
 
 for _type in (INLINE(), BLOCK(), TEXT(), MARKDOWN(), BOOLEAN, URL, INTEGER, NATURAL, NUMBER, DATE,
-              TIME, TIMESTAMP, UUID, EMAIL, HEXADECIMAL(), BINARY(), BASE64(), GROUP(), ENUM()):
+              TIME, TIMESTAMP, UUID, EMAIL, HEXADECIMAL, BINARY, BASE64(), GROUP(), ENUM()):
     TypeRegistry.register(_type)
 del _type
 
 
-__all__ = ["Type", "TypeRegistry", "RegexValue", "RangeValue", "binary_value"]
+__all__ = ["Type", "TypeRegistry", "RegexValue", "RangeValue", "BinaryString", "binary_value"]

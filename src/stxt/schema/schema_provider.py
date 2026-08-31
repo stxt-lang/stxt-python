@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from ..core.string_utils import lower_case
-from ..exceptions import ValidationException
+from ..exceptions import ParseException, ValidationException
 from .schema import SCHEMA_NAMESPACE, Schema
 
 
@@ -45,27 +45,20 @@ class SchemaProviderMemory(SchemaProvider):
 
     def add_schema(self, text: str) -> None:
         """Parses a schema document, validates it against the meta-schema and registers it
-        under its own namespace.
+        under its own namespace. The whole pipeline is the shared one of
+        :mod:`~stxt.schema.definition_compiler`; an empty target namespace is rejected by
+        the schema parser (``SCHEMA_NAMESPACE_EMPTY``).
 
         Raises:
             ParseException: if the document does not parse.
             ValidationException: the first meta-schema error, or ``SCHEMA_MULTIPLE_ROOTS``.
         """
-        from ..core.parser import Parser
+        from .definition_compiler import compile_document
         from .schema_parser import transform_node_to_schema
-        from .schema_validator import SchemaValidator
 
-        nodes = Parser().parse(text)
-        if len(nodes) != 1:
-            raise ValidationException(0, "SCHEMA_MULTIPLE_ROOTS", f"There are {len(nodes)} root nodes, and expected is 1")
-        node = nodes[0]
+        schema = compile_document(text, SchemaProviderMeta(), transform_node_to_schema,
+                                  "SCHEMA_MULTIPLE_ROOTS", "schema")
 
-        # The document must validate against the meta-schema (@stxt.schema)
-        errors = SchemaValidator(SchemaProviderMeta(), True).validate(node)
-        if errors:
-            raise errors[0]
-
-        schema = transform_node_to_schema(node)
         self._schemas[schema.get_namespace()] = schema
 
     def clear(self) -> None:
@@ -148,6 +141,10 @@ class SchemaProviderMeta(SchemaProvider):
     validate itself (bootstrap). ``None`` for any other namespace."""
 
     META_TEXT = META_TEXT
+
+    #: The meta-schema is immutable, so it is compiled once per process, lazily, and every
+    #: instance serves this same schema (constructing these providers is common: every
+    #: ``add_schema()`` and every discovery compilation builds one).
     _meta: Optional[Schema] = None
 
     def __init__(self) -> None:
@@ -161,7 +158,7 @@ class SchemaProviderMeta(SchemaProvider):
 
         nodes = Parser().parse(META_TEXT)
         if len(nodes) != 1:
-            raise ValidationException(0, "META_SCHEMA_INVALID",
+            raise ValidationException(ParseException.NO_LINE, "META_SCHEMA_INVALID",
                                       f"Meta schema must produce exactly 1 document, got {len(nodes)}")
         return transform_node_to_schema(nodes[0])
 

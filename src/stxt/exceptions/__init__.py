@@ -21,10 +21,17 @@ class ParseException(Exception):
     """Syntax error detected while parsing (lexical/structural phase, not schema).
 
     Attributes:
-        line: line number of the document where the error was detected.
+        line: line number of the document where the error was detected, or :attr:`NO_LINE`.
         code: error code in UPPERCASE (e.g. ``INVALID_LINE``).
         message: human-readable description.
     """
+
+    #: Line of an error that has no single source line: it concerns the document as a
+    #: whole (``SCHEMA_MULTIPLE_ROOTS``) or a condition with no one line to point at
+    #: (``NODE_DUPLICATED``, ``CHILD_NOT_DEFINED``). The value 0 is part of the
+    #: conformance surface (the kit asserts it); it is NOT ``Node.NO_LINE`` (-1), which
+    #: marks nodes built programmatically and never appears in errors.
+    NO_LINE = 0
 
     def __init__(self, line: int, code: str, message: str) -> None:
         super().__init__(message)

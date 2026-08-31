@@ -6,11 +6,10 @@ from __future__ import annotations
 from typing import Optional
 
 from ..core.parser import Parser
-from ..core.string_utils import is_empty
-from ..exceptions import ValidationException
+from ..exceptions import ParseException, ValidationException
+from ..schema.definition_compiler import compile_document
 from ..schema.schema import Schema
 from ..schema.schema_provider import SchemaProvider, SchemaProviderMemory
-from ..schema.schema_validator import SchemaValidator
 from .template_parser import TEMPLATE_NAMESPACE, transform_template_node_to_schema
 
 # The meta-template of the template language itself, embedded verbatim: STXT-TEMPLATE-SPEC 16.
@@ -27,6 +26,9 @@ class MetaTemplateSchemaProvider(SchemaProvider):
     can validate itself (bootstrap). ``None`` for any other namespace."""
 
     META_TEXT = META_TEXT
+
+    #: Compiled once per process and shared between instances, exactly like the ``_meta``
+    #: of :class:`~stxt.schema.schema_provider.SchemaProviderMeta`.
     _meta: Optional[Schema] = None
 
     def __init__(self) -> None:
@@ -37,7 +39,7 @@ class MetaTemplateSchemaProvider(SchemaProvider):
     def _compile() -> Schema:
         nodes = Parser().parse(META_TEXT)
         if len(nodes) != 1:
-            raise ValidationException(0, "META_SCHEMA_INVALID",
+            raise ValidationException(ParseException.NO_LINE, "META_SCHEMA_INVALID",
                                       f"Meta schema must produce exactly 1 document, got {len(nodes)}")
         # The meta-template itself is compiled with the template parser
         return transform_template_node_to_schema(nodes[0])
@@ -58,25 +60,16 @@ class TemplateSchemaProviderMemory(SchemaProviderMemory):
 
     def add_template(self, template: str) -> None:
         """Parses a template document, validates it against the template meta-schema and
-        registers the schema it produces.
+        registers the schema it produces. The whole pipeline is the shared one of
+        :mod:`~stxt.schema.definition_compiler`; an empty target namespace is rejected by
+        the template parser (``TEMPLATE_NAMESPACE_EMPTY``).
 
         Raises:
             ParseException: if the document does not parse.
             ValidationException: the first meta-template error, or ``TEMPLATE_MULTIPLE_ROOTS``.
         """
-        nodes = Parser().parse(template)
-        if len(nodes) != 1:
-            raise ValidationException(0, "TEMPLATE_MULTIPLE_ROOTS", f"There are {len(nodes)} root nodes, and expected is 1")
-        node = nodes[0]
-
-        # The document must validate against the meta-template (@stxt.template)
-        errors = SchemaValidator(MetaTemplateSchemaProvider(), True).validate(node)
-        if errors:
-            raise errors[0]
-
-        schema = transform_template_node_to_schema(node)
-        if is_empty(schema.get_namespace()):
-            raise ValidationException(node.get_line(), "TEMPLATE_NAMESPACE_EMPTY", "Template namespace is empty")
+        schema = compile_document(template, MetaTemplateSchemaProvider(),
+                                  transform_template_node_to_schema, "TEMPLATE_MULTIPLE_ROOTS", "template")
 
         self._schemas[schema.get_namespace()] = schema
 

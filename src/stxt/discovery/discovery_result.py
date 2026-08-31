@@ -7,9 +7,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from ..core.string_utils import lower_case
-from ..schema.schema import SCHEMA_NAMESPACE, Schema
+from ..schema.schema import SCHEMA_NAMESPACE, TEMPLATE_NAMESPACE, Schema
 from ..schema.schema_provider import SchemaProvider
-from ..template.template_schema_provider import TEMPLATE_NAMESPACE
 from .discovery_error import DiscoveryError
 
 
@@ -50,10 +49,11 @@ class DiscoveryResult(SchemaProvider):
     def get_schema(self, namespace: str) -> Optional[Schema]:
         """The meta-schemas for the two reserved namespaces, otherwise the active definition of
         the nearest level; ``None`` if the chain has none (SchemaProvider contract)."""
-        if namespace == TEMPLATE_NAMESPACE:
-            return self._template_meta.get_schema(namespace)
-        if namespace == SCHEMA_NAMESPACE:
-            return self._schema_meta.get_schema(namespace)
+        key = lower_case(namespace)
+        if key == TEMPLATE_NAMESPACE:
+            return self._template_meta.get_schema(key)
+        if key == SCHEMA_NAMESPACE:
+            return self._schema_meta.get_schema(key)
         definition = self.get_definition(namespace)
         return None if definition is None else definition.schema
 

@@ -7,7 +7,7 @@ from typing import Optional
 
 from ..core.string_utils import compact_spaces, normalize_chars, trim_to_not_null
 from ..core.validations import is_valid_node_name
-from ..exceptions import ValidationException
+from ..exceptions import ParseException, ValidationException
 from .child_definition import ChildDefinition
 
 
@@ -53,15 +53,15 @@ class NodeDefinition:
         """Raises ``CHILD_DUPLICATED`` for two equivalent Child entries."""
         qname = child_definition.get_qualified_name()
         if qname in self._children:
-            raise ValidationException(0, "CHILD_DUPLICATED",
-                                      "Exists a previous node definition with: " + qname)
+            raise ValidationException(ParseException.NO_LINE, "CHILD_DUPLICATED",
+                                      "A child declaration with the same name already exists: " + qname)
         self._children[qname] = child_definition
 
     def add_value(self, value: str, line: int) -> None:
         """Adds an allowed value (ENUM). Duplicated values (after trim) are ``VALUE_DUPLICATED``."""
         value = trim_to_not_null(value)
         if value in self._values:
-            raise ValidationException(line, "VALUE_DUPLICATED", f"The values {value} is duplicated")
+            raise ValidationException(line, "VALUE_DUPLICATED", f"The value {value} is duplicated")
         self._values.append(value)
 
     def is_allowed_value(self, value: str) -> bool:

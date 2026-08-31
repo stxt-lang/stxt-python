@@ -14,12 +14,12 @@ from typing import Optional
 from ..core.node import Node
 from ..core.parser import Parser
 from ..core.string_utils import lower_case
-from ..schema.schema import SCHEMA_NAMESPACE, Schema
+from ..schema.definition_compiler import compile_node
+from ..schema.schema import SCHEMA_NAMESPACE, TEMPLATE_NAMESPACE
 from ..schema.schema_parser import transform_node_to_schema
 from ..schema.schema_provider import SchemaProvider, SchemaProviderMeta
-from ..schema.schema_validator import SchemaValidator
 from ..template.template_parser import transform_template_node_to_schema
-from ..template.template_schema_provider import TEMPLATE_NAMESPACE, MetaTemplateSchemaProvider
+from ..template.template_schema_provider import MetaTemplateSchemaProvider
 from .discovery_environment import DiscoveryEnvironment, SystemDiscoveryEnvironment
 from .discovery_error import DiscoveryError
 from .discovery_file_system import DiscoveryEntry, DiscoveryFileSystem, OsDiscoveryFileSystem
@@ -173,9 +173,9 @@ class DiscoveryResolver:
 
         try:
             if namespace == TEMPLATE_NAMESPACE:
-                schema = self._compile_template(node)
+                schema = compile_node(node, self._template_meta, transform_template_node_to_schema)
             elif namespace == SCHEMA_NAMESPACE:
-                schema = self._compile_schema(node)
+                schema = compile_node(node, self._schema_meta, transform_node_to_schema)
             else:
                 level.errors.append(DiscoveryError(DiscoveryError.NOT_A_DEFINITION, file,
                                                    f"Root node belongs to '{namespace}', not to @stxt.schema or @stxt.template: {file}"))
@@ -206,17 +206,8 @@ class DiscoveryResolver:
 
         level.definitions[key] = DiscoveryDefinition(schema.get_namespace(), schema, file, level.dir)
 
-    def _compile_schema(self, node: Node) -> Schema:
-        errors = SchemaValidator(self._schema_meta, True).validate(node)
-        if errors:
-            raise errors[0]
-        return transform_node_to_schema(node)
-
-    def _compile_template(self, node: Node) -> Schema:
-        errors = SchemaValidator(self._template_meta, True).validate(node)
-        if errors:
-            raise errors[0]
-        return transform_template_node_to_schema(node)
+    # Compilation itself is the shared pipeline of stxt.schema.definition_compiler
+    # (compile_node): validate against the meta of the kind, raise the first error, transform.
 
 
 def _sort_by_path(entries: list[DiscoveryEntry]) -> list[DiscoveryEntry]:

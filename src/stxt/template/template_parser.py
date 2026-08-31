@@ -21,10 +21,12 @@ from ..schema.child_definition import ChildDefinition
 from ..schema.node_definition import NodeDefinition
 from ..schema.schema import Schema
 from ..schema.types import TypeRegistry
+from .child_line import ChildLine
 from .child_line_parser import parse_child_line
 
-# The namespace of the template language itself (re-exported by template_schema_provider)
-TEMPLATE_NAMESPACE = "@stxt.template"
+# The namespace of the template language itself (re-exported by template_schema_provider);
+# the canonical constant is Schema.TEMPLATE_NAMESPACE.
+TEMPLATE_NAMESPACE = Schema.TEMPLATE_NAMESPACE
 
 
 def transform_template_node_to_schema(node: Node) -> Schema:
@@ -82,104 +84,132 @@ def transform_template_node_to_schema(node: Node) -> Schema:
 
 
 def _add_to_schema(schema: Schema, node: Node) -> None:
+    # Adds to the schema the definition a Structure node declares, along with its children.
+    #
+    # Only the orchestration lives here; each of the three shapes a Structure line can take
+    # has its own helper below:
+    #   * a node of an external namespace  -> _validate_external_node() and nothing is created
+    #   * a name seen for the first time   -> _create_definition()
+    #   * a reappearance                   -> _validate_reference() and nothing is created
+    # and the children of a definition are declared and recursed by _add_children().
+
     # A Structure line belongs to the template grammar: it must use ':'; a core BLOCK node
     # ('>>') is invalid here even when its text happens to be empty (6.3).
     if not isinstance(node, InlineNode):
         raise ValidationException(node.get_line(), "STRUCTURE_LINE_NOT_VALID", "Template Structure lines must use ':'")
 
-    namespace = node.get_namespace()
-    name = node.get_name()
-
     # Parse the RuleSpec (cardinality / type / values) from the inline value
     cl = parse_child_line(node.get_value(), node.get_line())
 
     # No explicit namespace => the target namespace of the template
+    namespace = node.get_namespace()
     if is_empty(namespace):
         namespace = schema.get_namespace()
 
-    # Cross-namespace node: NOT defined locally; it may only declare cardinality — no type,
-    # no ENUM values and no children (6.4, 10 and 14.15).
     if namespace != schema.get_namespace():
-        type_ = cl.get_type()
-        if type_ is not None and trim(type_) != "":
-            raise ValidationException(node.get_line(), "TYPE_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
-                                      "Not allowed type definition in external namespaces")
-        if cl.get_values() is not None:
-            raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
-                                      f"Not allowed values in external namespaces (node {node.get_name()})")
-        if len(node.get_children()) > 0:
-            raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
-                                      f"Not allowed children in external namespaces (node {node.get_name()})")
+        _validate_external_node(node, cl)
         return  # no definitions are created for nodes of other namespaces
 
     # New definition or a reappearance (reference)?
-    schema_node = schema.get_node_definition(name)
+    schema_node = schema.get_node_definition(node.get_name())
 
-    if schema_node is None:
-        # --- New definition ---
-        type_ = cl.get_type()
-        if type_ is None:
-            type_ = "INLINE"
-
-        # A "@" here means a reference that resolved to nothing: the schema already holds
-        # both the previous (closed) definitions and the open ancestors (6.4 and 14.11).
-        if type_.startswith("@"):
-            raise ValidationException(node.get_line(), "REFERENCE_NOT_FOUND",
-                                      f"Reference '{type_}' does not point to a previous definition or an open ancestor")
-
-        schema_node = NodeDefinition(node.get_name(), type_, node.get_line(), None)
-        schema.add_node_definition(schema_node)
-
-        if TypeRegistry.get(type_) is None:
-            raise ValidationException(node.get_line(), "TYPE_NOT_VALID", "Type not valid: " + type_)
-
-        # ENUM values, if any
-        values = cl.get_values()
-        if values is not None:
-            if type_ != "ENUM":
-                # Same code as SchemaParser: a template is sugar equivalent to a schema
-                raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_FOR_TYPE",
-                                          f"Values only supported for type ENUM, not for type {type_}")
-            for value in values:
-                schema_node.add_value(value, node.get_line())
-
-        # An ENUM with no list of values is an invalid template (9 and 13.7)
-        if type_ == "ENUM" and (values is None or len(values) == 0):
-            raise ValidationException(node.get_line(), "VALUES_REQUIRED", "ENUM Type must include values")
-
-    else:
-        # --- Reappearance: must be a "@Node Name" reference ---
-        type_ = cl.get_type()
-
-        # A reappearance without "@" would redefine an existing node: error.
-        if type_ is None or not type_.startswith("@"):
-            raise ValidationException(node.get_line(), "REFERENCE_REQUIRED",
-                                      "Multiple node reference must start with @: " + node.get_name())
-
-        reference = trim(type_[1:])
-
-        # Reference and explicit type on the same line (14.13)
-        explicit_type = _reference_type(reference, node.get_canonical_name())
-        if explicit_type is not None:
-            raise ValidationException(node.get_line(), "REFERENCE_WITH_TYPE_NOT_ALLOWED",
-                                      f"Reference '@{node.get_name()}' can not declare a type: {explicit_type}")
-
-        # The name of the reference must match (canonically) the one of the line (14.12)
-        if normalize_chars(reference) != node.get_canonical_name():
-            raise ValidationException(node.get_line(), "REFERENCE_NAME_NOT_VALID",
-                                      f"Reference must be '@{node.get_name()}', not '{reference}'")
-
-        # A reference may override the cardinality, but it may redefine neither the ENUM
-        # values nor the children (6.4)
-        if cl.get_values() is not None:
-            raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_IN_REFERENCE",
-                                      f"Reference '@{node.get_name()}' can not redefine ENUM values")
-        if len(node.get_children()) > 0:
-            raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED_IN_REFERENCE",
-                                      f"Reference '@{node.get_name()}' can not redefine children")
+    if schema_node is not None:
+        _validate_reference(node, cl)
         return  # valid reference: nothing is redefined, no children are processed
 
-    # The definition exists: process its direct children.
+    schema_node = _create_definition(schema, node, cl)
+    _add_children(schema, schema_node, node)
+
+
+def _validate_external_node(node: InlineNode, cl: ChildLine) -> None:
+    # Cross-namespace node (6.4, 10 and 14.15): NOT defined locally; it may only declare
+    # cardinality — no type, no ENUM values and no children.
+    type_ = cl.get_type()
+    if type_ is not None and trim(type_) != "":
+        raise ValidationException(node.get_line(), "TYPE_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
+                                  "Not allowed type definition in external namespaces")
+
+    if cl.get_values() is not None:
+        raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
+                                  f"Not allowed values in external namespaces (node {node.get_name()})")
+
+    if len(node.get_children()) > 0:
+        raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED_IN_EXTERNAL_NAMESPACE",
+                                  f"Not allowed children in external namespaces (node {node.get_name()})")
+
+
+def _create_definition(schema: Schema, node: InlineNode, cl: ChildLine) -> NodeDefinition:
+    # First appearance of a name: creates its NodeDefinition (with its type and its ENUM
+    # values, when it has them) and registers it in the schema.
+    type_ = cl.get_type()
+    if type_ is None:
+        type_ = "INLINE"
+
+    # A "@" here means a reference that resolved to nothing: the schema already holds
+    # both the previous (closed) definitions and the open ancestors (6.4 and 14.11).
+    if type_.startswith("@"):
+        raise ValidationException(node.get_line(), "REFERENCE_NOT_FOUND",
+                                  f"Reference '{type_}' does not point to a previous definition or an open ancestor")
+
+    schema_node = NodeDefinition(node.get_name(), type_, node.get_line(), None)
+    schema.add_node_definition(schema_node)
+
+    if TypeRegistry.get(type_) is None:
+        raise ValidationException(node.get_line(), "TYPE_NOT_VALID", "Type not valid: " + type_)
+
+    # ENUM values, if any
+    values = cl.get_values()
+    if values is not None:
+        if type_ != "ENUM":
+            # Same code as SchemaParser: a template is sugar equivalent to a schema
+            raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_FOR_TYPE",
+                                      f"Values only supported for type ENUM, not for type {type_}")
+        for value in values:
+            schema_node.add_value(value, node.get_line())
+
+    # An ENUM with no list of values is an invalid template (9 and 13.7)
+    if type_ == "ENUM" and (values is None or len(values) == 0):
+        raise ValidationException(node.get_line(), "VALUES_REQUIRED", "ENUM Type must include values")
+
+    return schema_node
+
+
+def _validate_reference(node: InlineNode, cl: ChildLine) -> None:
+    # Reappearance of an already defined name: it must be a "@Node Name" reference, and a
+    # reference may override the cardinality but may redefine neither the ENUM values nor
+    # the children (6.4, 14.12 and 14.13).
+    type_ = cl.get_type()
+
+    # A reappearance without "@" would redefine an existing node: error.
+    if type_ is None or not type_.startswith("@"):
+        raise ValidationException(node.get_line(), "REFERENCE_REQUIRED",
+                                  "Multiple node reference must start with @: " + node.get_name())
+
+    reference = trim(type_[1:])
+
+    # Reference and explicit type on the same line (14.13)
+    explicit_type = _reference_type(reference, node.get_canonical_name())
+    if explicit_type is not None:
+        raise ValidationException(node.get_line(), "REFERENCE_WITH_TYPE_NOT_ALLOWED",
+                                  f"Reference '@{node.get_name()}' can not declare a type: {explicit_type}")
+
+    # The name of the reference must match (canonically) the one of the line (14.12)
+    if normalize_chars(reference) != node.get_canonical_name():
+        raise ValidationException(node.get_line(), "REFERENCE_NAME_NOT_VALID",
+                                  f"Reference must be '@{node.get_name()}', not '{reference}'")
+
+    if cl.get_values() is not None:
+        raise ValidationException(node.get_line(), "VALUES_NOT_ALLOWED_IN_REFERENCE",
+                                  f"Reference '@{node.get_name()}' can not redefine ENUM values")
+
+    if len(node.get_children()) > 0:
+        raise ValidationException(node.get_line(), "CHILDREN_NOT_ALLOWED_IN_REFERENCE",
+                                  f"Reference '@{node.get_name()}' can not redefine children")
+
+
+def _add_children(schema: Schema, schema_node: NodeDefinition, node: InlineNode) -> None:
+    # Declares every direct child of a definition as a Child (with its cardinality) and
+    # recurses into each one as a definition/reference of its own.
     children = node.get_children()
 
     # Template error 14.9: children under an effective type that does not admit them
@@ -191,7 +221,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
         # 6.3 again: every Structure line uses ':', so a child is inline too
         if not isinstance(child, InlineNode):
             raise ValidationException(child.get_line(), "STRUCTURE_LINE_NOT_VALID", "Template Structure lines must use ':'")
-        cl = parse_child_line(child.get_value(), child.get_line())
+        child_cl = parse_child_line(child.get_value(), child.get_line())
 
         child_namespace = child.get_namespace()
         if is_empty(child_namespace):
@@ -199,7 +229,7 @@ def _add_to_schema(schema: Schema, node: Node) -> None:
 
         # The child is declared as a Child (with its cardinality) in the current definition
         schema_node.add_child_definition(
-            ChildDefinition(child.get_name(), child_namespace, cl.get_min(), cl.get_max(), child.get_line()))
+            ChildDefinition(child.get_name(), child_namespace, child_cl.get_min(), child_cl.get_max(), child.get_line()))
 
         # And processed recursively as a definition/reference
         _add_to_schema(schema, child)

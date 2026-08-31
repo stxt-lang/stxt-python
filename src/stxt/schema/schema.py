@@ -7,11 +7,14 @@ from typing import Optional
 
 from ..core.string_utils import lower_case, normalize_chars
 from ..core.validations import validate_namespace_format
-from ..exceptions import ValidationException
+from ..exceptions import ParseException, ValidationException
 from .node_definition import NodeDefinition
 
 #: Namespace of the schema language itself.
 SCHEMA_NAMESPACE = "@stxt.schema"
+
+#: Namespace of the template language.
+TEMPLATE_NAMESPACE = "@stxt.template"
 
 
 class Schema:
@@ -19,6 +22,7 @@ class Schema:
     the result of :func:`transform_node_to_schema` (or of compiling a template)."""
 
     SCHEMA_NAMESPACE = SCHEMA_NAMESPACE
+    TEMPLATE_NAMESPACE = TEMPLATE_NAMESPACE
 
     def __init__(self, namespace: str, line: int, description: Optional[str]) -> None:
         self._namespace = lower_case(namespace)
@@ -44,11 +48,11 @@ class Schema:
 
     def add_node_definition(self, node_definition: NodeDefinition) -> None:
         """Raises ``NODE_DUPLICATED`` when two Node definitions share a canonical name."""
-        qname = node_definition.get_canonical_name()
-        if qname in self._nodes:
-            raise ValidationException(0, "NODE_DUPLICATED",
-                                      "Exists a previous node definition with: " + qname)
-        self._nodes[qname] = node_definition
+        canonical_name = node_definition.get_canonical_name()
+        if canonical_name in self._nodes:
+            raise ValidationException(ParseException.NO_LINE, "NODE_DUPLICATED",
+                                      "A node definition with the same name already exists: " + canonical_name)
+        self._nodes[canonical_name] = node_definition
 
     def __repr__(self) -> str:
         return f"Schema({self._namespace!r}, {len(self._nodes)} nodes)"

@@ -3,18 +3,17 @@ convenience, not normative)."""
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Callable, Optional
 
 from ..core.node import Node
 from ..core.parser import Parser
 from ..core.string_utils import lower_case
-from ..exceptions import ValidationException
-from ..schema.schema import SCHEMA_NAMESPACE, Schema
+from ..schema.definition_compiler import compile_node
+from ..schema.schema import SCHEMA_NAMESPACE, TEMPLATE_NAMESPACE, Schema
 from ..schema.schema_parser import transform_node_to_schema
 from ..schema.schema_provider import SchemaProvider, SchemaProviderMeta
-from ..schema.schema_validator import SchemaValidator
 from ..template.template_parser import transform_template_node_to_schema
-from ..template.template_schema_provider import TEMPLATE_NAMESPACE, MetaTemplateSchemaProvider
+from ..template.template_schema_provider import MetaTemplateSchemaProvider
 
 
 class UnifiedSchemaProvider(SchemaProvider):
@@ -30,9 +29,9 @@ class UnifiedSchemaProvider(SchemaProvider):
 
     def get_schema(self, namespace: str) -> Optional[Schema]:
         key = lower_case(namespace)
-        if namespace == TEMPLATE_NAMESPACE:
+        if key == TEMPLATE_NAMESPACE:
             return self._template_meta.get_schema(key)
-        if namespace == SCHEMA_NAMESPACE:
+        if key == SCHEMA_NAMESPACE:
             return self._schema_meta.get_schema(key)
         return self._schemas.get(key)
 
@@ -46,25 +45,16 @@ class UnifiedSchemaProvider(SchemaProvider):
         for node in Parser().parse(text):
             namespace = node.get_namespace()
             if namespace == TEMPLATE_NAMESPACE:
-                self._add_template_node(node)
+                self._add_node(node, self._template_meta, transform_template_node_to_schema)
             elif namespace == SCHEMA_NAMESPACE:
-                self._add_schema_node(node)
+                self._add_node(node, self._schema_meta, transform_node_to_schema)
 
-    def _add_template_node(self, node: Node) -> None:
-        self._throw_if_invalid(SchemaValidator(self._template_meta, True).validate(node))
-        schema = transform_template_node_to_schema(node)
+    def _add_node(self, node: Node, meta: SchemaProvider, transform: Callable[[Node], Schema]) -> None:
+        # Compiles a definition root through the shared pipeline (see definition_compiler)
+        # and registers it; a definition that does not validate is never registered.
+        schema = compile_node(node, meta, transform)
+
         self._schemas[lower_case(schema.get_namespace())] = schema
-
-    def _add_schema_node(self, node: Node) -> None:
-        self._throw_if_invalid(SchemaValidator(self._schema_meta, True).validate(node))
-        schema = transform_node_to_schema(node)
-        self._schemas[lower_case(schema.get_namespace())] = schema
-
-    @staticmethod
-    def _throw_if_invalid(errors: list[ValidationException]) -> None:
-        # A schema/template that does not validate against its meta-schema must not be loaded
-        if errors:
-            raise errors[0]
 
     def clear(self) -> None:
         """Removes every schema and template registered in this provider."""

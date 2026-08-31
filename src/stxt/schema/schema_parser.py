@@ -10,7 +10,7 @@ from ..core.node import InlineNode, Node
 from ..core.platform import is_integer, parse_integer
 from ..core.string_utils import is_empty, lower_case
 from ..core.validations import NAMESPACE_FORMAT
-from ..exceptions import ValidationException
+from ..exceptions import ParseException, ValidationException
 from .child_definition import ChildDefinition
 from .node_definition import NodeDefinition
 from .schema import SCHEMA_NAMESPACE, Schema
@@ -69,7 +69,7 @@ def transform_node_to_schema(node: Node) -> Schema:
         for sch_child in sch_node.get_children().values():
             if sch_child.get_namespace() == schema.get_namespace():
                 if sch_child.get_canonical_name() not in all_names:
-                    raise ValidationException(0, "CHILD_NOT_DEFINED",
+                    raise ValidationException(ParseException.NO_LINE, "CHILD_NOT_DEFINED",
                                               f"Child {sch_child.get_canonical_name()} not defined in {schema.get_namespace()}")
 
     return schema
@@ -104,25 +104,26 @@ def _create_node_definition(node: Node, namespace: str) -> NodeDefinition:
             _put_child_to_node_definition(result, child, namespace)
 
     # Allowed values: only valid for the ENUM type
-    values = n.get_children_by_name("values")
-    if values:
+    values_nodes = n.get_children_by_name("values")  # the "Values:" containers
+    value_entries: list[Node] = []                   # the "Value:" entries inside
+    if values_nodes:
         if type_ != "ENUM":
             raise ValidationException(n.get_line(), "VALUES_NOT_ALLOWED_FOR_TYPE",
                                       f"Values only supported for type ENUM, not for type {type_}")
-        if len(values) > 1:
-            raise ValidationException(values[1].get_line(), "VALUES_DUPLICATED",
-                                      f"Node {name} declares Values {len(values)} times, and expected is 1")
+        if len(values_nodes) > 1:
+            raise ValidationException(values_nodes[1].get_line(), "VALUES_DUPLICATED",
+                                      f"Node {name} declares Values {len(values_nodes)} times, and expected is 1")
 
-        values = _inline(values[0]).get_children_by_name("value")
-        for value in values:
+        value_entries = _inline(values_nodes[0]).get_children_by_name("value")
+        for value in value_entries:
             # An empty Value: is a schema error (7.2, condition 14): an enumeration whose only
             # valid value is the empty string makes no sense
             if is_empty(value.get_text()):
                 raise ValidationException(value.get_line(), "VALUE_EMPTY", "Value of ENUM cannot be empty")
             result.add_value(value.get_text(), value.get_line())
 
-    # An ENUM must declare at least one value
-    if type_ == "ENUM" and len(values) == 0:
+    # An ENUM must declare at least one value (a "Values:" with no entries included)
+    if type_ == "ENUM" and len(value_entries) == 0:
         raise ValidationException(n.get_line(), "VALUES_REQUIRED", "ENUM Type must include values")
 
     return result
