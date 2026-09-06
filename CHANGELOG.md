@@ -1,7 +1,25 @@
 # Changelog
 
 All notable changes to the `stxt` Python package. The version number announces the same
-language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number.
+language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number; a patch
+number may still move on its own for something that concerns only this package, such as its
+published metadata.
+
+## 1.0.1 - 2026-09-06
+
+**Packaging only.** No change to the language, the behaviour or the public API: apart from
+`__version__`, the code of this release is the code of 1.0.0, and `SPEC_VERSION` stays at
+`1.0`.
+`@stxt-lang/core` and `dev.stxt:stxt-core` stay at 1.0.0 with the same scope; this is the one
+place where the patch number of this package moves on its own.
+
+### Fixed
+
+- The PyPI metadata now declares `Development Status :: 5 - Production/Stable`. The 1.0.0
+  upload went out with the `4 - Beta` classifier left over from the pre-1.0 line, and
+  published metadata cannot be edited, so the correction needed a new version.
+- The README pointed at `stxt.dev/lang-stability`, the old address of the stability page
+  (now `stxt.dev/stability`, still reachable through a redirect).
 
 ## 1.0.0 - 2026-08-31
 
