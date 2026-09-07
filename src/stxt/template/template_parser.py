@@ -15,7 +15,7 @@ from typing import Optional
 from ..core.node import InlineNode, Node
 from ..core.parser import Parser
 from ..core.string_utils import is_empty, lower_case, normalize_chars, trim
-from ..core.validations import NAMESPACE_FORMAT
+from ..core.validations import is_valid_namespace_format
 from ..exceptions import ParseException, ValidationException
 from ..schema.child_definition import ChildDefinition
 from ..schema.node_definition import NodeDefinition
@@ -47,7 +47,7 @@ def transform_template_node_to_schema(node: Node) -> Schema:
     target = lower_case(node.get_text())
     if is_empty(target):
         raise ValidationException(node.get_line(), "TEMPLATE_NAMESPACE_EMPTY", "Template namespace is empty")
-    if NAMESPACE_FORMAT.fullmatch(target) is None:
+    if not is_valid_namespace_format(target):
         raise ValidationException(node.get_line(), "TEMPLATE_ROOT_NOT_VALID",
                                   f"Template namespace not valid: {node.get_text()}")
     result = Schema(target, node.get_line(), None)

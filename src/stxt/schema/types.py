@@ -124,8 +124,12 @@ class ENUM(Type):
             raise _not_allowed_text(node)
         value = node.get_text()
         if not ns_node.is_allowed_value(value):
+            # The message deliberately does not list the allowed values: every invalid node
+            # would carry a copy of the whole list, and a large ENUM times a document with many
+            # invalid nodes multiplies memory (10 000 values x 2 000 nodes gave 180 MB of
+            # messages). The list stays available through NodeDefinition.get_values().
             raise ValidationException(node.get_line(), "INVALID_VALUE",
-                                      f"The value '{value}' not allowed. Only: {ns_node.get_values()}")
+                                      f"The value '{value}' is not one of the allowed values of {ns_node.get_name()}")
 
 
 # ---------------------------------------------------------------- regex types

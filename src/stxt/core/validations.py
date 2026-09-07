@@ -2,16 +2,39 @@
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from typing import Optional
 
 from ..exceptions import ParseException
 from .string_utils import compact_spaces, is_empty, normalize_chars, normalize_nfc
 
-# Format of a logical namespace (STXT-SPEC section 7): lower-case ASCII letters, digits and
-# dots; an optional leading '@' for the reserved namespaces; two or more labels.
-NAMESPACE_FORMAT = re.compile(r"@?[a-z0-9]+(\.[a-z0-9]+)+")
+# Characters of a namespace label (STXT-SPEC section 7): lower-case ASCII letters and digits
+_LABEL_CHARS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789")
+
+
+def is_valid_namespace_format(namespace: str) -> bool:
+    """Format of a logical namespace (STXT-SPEC section 7): lower-case ASCII letters, digits
+    and dots; an optional leading ``@`` for the reserved namespaces; two or more labels
+    ``[a-z0-9]+`` separated by ``.``.
+
+    Checked by a hand-written scan rather than the regex ``^@?[a-z0-9]+(\\.[a-z0-9]+)+$``,
+    which in engines that implement a repeated group by recursion (Java) overflowed the stack
+    with ~2 000 labels; the scan is linear and identical in every port."""
+    n = len(namespace)
+    i = 1 if namespace.startswith("@") else 0
+    labels = 0
+    while True:
+        start = i
+        while i < n and namespace[i] in _LABEL_CHARS:
+            i += 1
+        if i == start:
+            return False  # empty label: "", "@", "a.", ".a", "a..b"
+        labels += 1
+        if i == n:
+            return labels >= 2
+        if namespace[i] != ".":
+            return False
+        i += 1
 
 _NAME_SEPARATORS = frozenset("-_ ")
 
@@ -61,5 +84,5 @@ def validate_namespace_format(namespace: Optional[str], line_number: int) -> Non
     """
     if namespace is None or namespace == "":
         return
-    if NAMESPACE_FORMAT.fullmatch(namespace) is None:
+    if not is_valid_namespace_format(namespace):
         raise ParseException(line_number, "INVALID_NAMESPACE", "Namespace not valid: " + namespace)

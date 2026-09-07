@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import binascii
 import re
+from typing import Iterator
 
 _LINE_BREAK = re.compile(r"\r\n|\n")
 _INTEGER = re.compile(r"[-+]?[0-9]+")
@@ -18,6 +19,22 @@ def split_lines(text: str) -> list[str]:
     ``"a\\r\\nb\\n"`` gives ``["a", "b", ""]``.
     """
     return _LINE_BREAK.split(text)
+
+
+def iter_lines(text: str) -> Iterator[str]:
+    """Iterates the lines of the content lazily, at every LF or CRLF (a lone CR is content,
+    STXT-SPEC 3), without the trailing empty line: the final line break terminates the last
+    line, so ``"a\\nb\\n"`` and ``"a\\nb"`` both give ``"a"``, ``"b"`` (and ``""`` gives no line).
+    The parser consumes it so that no line is materialised before its limits apply."""
+    start = 0
+    length = len(text)
+    while start < length:
+        end = text.find("\n", start)
+        if end == -1:
+            end = length
+        cut = end - 1 if end > start and text[end - 1] == "\r" else end
+        yield text[start:cut]
+        start = end + 1
 
 
 def is_integer(text: str) -> bool:

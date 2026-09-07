@@ -5,12 +5,12 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..core.constants import MAX_CARDINALITY
+from ..core.constants import MAX_CARDINALITY, MAX_CARDINALITY_DIGITS
 from ..core.name_namespace import parse_name_namespace
 from ..core.node import InlineNode, Node
 from ..core.platform import is_integer, parse_integer
 from ..core.string_utils import is_empty, lower_case
-from ..core.validations import NAMESPACE_FORMAT
+from ..core.validations import is_valid_namespace_format
 from ..exceptions import ParseException, ValidationException
 from .child_definition import ChildDefinition
 from .node_definition import NodeDefinition
@@ -47,7 +47,7 @@ def transform_node_to_schema(node: Node) -> Schema:
     target = lower_case(root.get_value())
     if is_empty(target):
         raise ValidationException(root.get_line(), "SCHEMA_NAMESPACE_EMPTY", "Schema namespace is empty")
-    if NAMESPACE_FORMAT.fullmatch(target) is None:
+    if not is_valid_namespace_format(target):
         raise ValidationException(root.get_line(), "SCHEMA_ROOT_NOT_VALID",
                                   f"Schema namespace not valid: {root.get_value()}")
 
@@ -58,11 +58,11 @@ def transform_node_to_schema(node: Node) -> Schema:
 
     schema = Schema(target, root.get_line(), description)
 
-    all_names: list[str] = []
+    all_names: set[str] = set()  # O(1) membership: a schema may hold thousands of nodes
     for n in root.get_children_by_name("node"):
         sch_node = _create_node_definition(n, schema.get_namespace())
         schema.add_node_definition(sch_node)
-        all_names.append(sch_node.get_canonical_name())
+        all_names.add(sch_node.get_canonical_name())
 
     # Every Child of the schema's own namespace must refer to a Node declared in this schema
     # (cross-namespace Children are validated in their own schema, not here).
@@ -154,6 +154,11 @@ def _get_integer(node: InlineNode, child_name: str) -> Optional[int]:
         return None
     if not is_integer(n.get_text()):
         raise ValidationException(node.get_line(), "CARDINALITY_NOT_VALID", "Integer not valid: " + n.get_text())
+    # A numeral with more digits than MAX_CARDINALITY has exceeds the bound whatever its value:
+    # rejected before converting, so int() (limited to 4 300 digits) never gets to raise
+    if len(n.get_text().lstrip("+-")) > MAX_CARDINALITY_DIGITS:
+        raise ValidationException(node.get_line(), "CARDINALITY_NOT_VALID",
+                                  f"Cardinality above {MAX_CARDINALITY}: " + n.get_text())
     value = parse_integer(n.get_text())
     # Cardinalities are bounded to 2^32 - 1 (STXT-SCHEMA-SPEC 10)
     if value > MAX_CARDINALITY:

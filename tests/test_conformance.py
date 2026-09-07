@@ -63,7 +63,7 @@ def _first_validation_error(text, provider):
 
 
 def test_declares_a_kit_version_and_the_specifications_it_covers():
-    assert re.fullmatch(r"\d+\.\d+", MANIFEST["kit"])
+    assert re.fullmatch(r"\d+\.\d+(\.\d+)?", MANIFEST["kit"])
     assert MANIFEST["specifications"]["STXT-SPEC"] == "1.0"
     assert MANIFEST["specifications"]["STXT-TREE-SPEC"] == "1.0"
     assert CASES

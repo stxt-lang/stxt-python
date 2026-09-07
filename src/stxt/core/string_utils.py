@@ -46,9 +46,16 @@ def normalize_chars(text: Optional[str]) -> str:
     return value.strip("-")
 
 
+_ASCII_LOWER = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
+
+
 def lower_case(text: Optional[str]) -> str:
-    """Locale-independent lower case; ``""`` for ``None``. Used for namespaces."""
-    return (text or "").lower()
+    """ASCII lower case: maps A-Z to a-z and leaves every other character as it is; ``""`` for
+    ``None``. Used for namespaces, which are ASCII by definition (STXT-SPEC 7.1), so it must
+    not be :meth:`str.lower`: that one maps U+212A KELVIN SIGN to ``k``, which made
+    ``(\u212Aelvin.x)`` the valid namespace ``kelvin.x`` until 2026-09-06, the very homograph
+    7.1 rules out. With an ASCII map the sign reaches the validator unchanged and is rejected."""
+    return (text or "").translate(_ASCII_LOWER)
 
 
 def trim_to_not_null(text: Optional[str]) -> str:

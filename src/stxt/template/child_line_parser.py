@@ -9,24 +9,63 @@ The RuleSpec is the part AFTER the ``:`` of a template line::
 from __future__ import annotations
 
 import re
+from typing import Optional
 
-from ..core.constants import MAX_CARDINALITY
+from ..core.constants import MAX_CARDINALITY, MAX_CARDINALITY_DIGITS
 from ..core.platform import is_natural, parse_integer
 from ..core.string_utils import trim
 from ..exceptions import ValidationException
 from .child_line import ChildLine
 
-# Pattern with three optional groups: count, type, values.
-# Only U+0020/U+0009 count as blanks here (TEMPLATE-SPEC 6.2/9): the pattern uses ``[ \t]``
-# instead of ``\s`` so that NBSP, U+3000... are treated as content, exactly like the other
-# ports. Otherwise the three ports would accept/reject different inputs.
-CHILD_LINE_PATTERN = re.compile(
-    r"^[ \t]*"
-    r"(?:\([ \t]*(?P<count>[^() \t][^)]*?)[ \t]*\)[ \t]*)?"   # (cardinality)
-    r"(?P<type>[^()\[\]]*)?"                                    # type or @reference
-    r"(?:\[[ \t]*(?P<values>[^\]]*?)[ \t]*\][ \t]*)?"          # [ENUM values]
-    r"[ \t]*$"
-)
+def _is_blank(c: str) -> bool:
+    return c == " " or c == "\t"
+
+
+def _split_rule_spec(raw_line: str) -> Optional[tuple[Optional[str], Optional[str], Optional[str]]]:
+    """Splits a RuleSpec ``(count) TYPE [values]`` into its three optional parts by a
+    hand-written scan, not a regular expression: the pattern used until 2026-09-06 backtracked
+    in O(n^3) on a line without the closing ``]`` (a 10 000-character Structure line took
+    minutes). Blanks are U+0020/U+0009 only (TEMPLATE-SPEC 6.2/9), and the rules the pattern
+    enforced are kept exactly: the count runs to the first ``)`` and, trimmed, is neither empty
+    nor starts with ``(``; the type may not contain ``(``, ``)`` or ``]``; the values run from
+    the first ``[`` to the first ``]`` after it, and only blanks may follow that ``]``.
+
+    Returns the trimmed parts (``None`` each when absent), or ``None`` if the line has not
+    that shape."""
+    n = len(raw_line)
+    i = 0
+    while i < n and _is_blank(raw_line[i]):
+        i += 1
+
+    count: Optional[str] = None
+    if i < n and raw_line[i] == "(":
+        close = raw_line.find(")", i + 1)
+        if close == -1:
+            return None
+        count = trim(raw_line[i + 1:close])
+        if count == "" or count[0] == "(":
+            return None
+        i = close + 1
+
+    open_ = raw_line.find("[", i)
+    type_: Optional[str] = raw_line[i:n if open_ == -1 else open_]
+    if "(" in type_ or ")" in type_ or "]" in type_:  # type: ignore[operator]
+        return None
+    type_ = trim(type_)
+    if type_ == "":
+        type_ = None
+
+    values: Optional[str] = None
+    if open_ != -1:
+        close = raw_line.find("]", open_ + 1)
+        if close == -1:
+            return None
+        values = trim(raw_line[open_ + 1:close])
+        for j in range(close + 1, n):
+            if not _is_blank(raw_line[j]):
+                return None
+
+    return count, type_, values
 
 
 def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
@@ -40,19 +79,13 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
     if trim(raw_line) == "":
         return ChildLine(None, None, None, None)
 
-    matcher = CHILD_LINE_PATTERN.match(raw_line)
-    if matcher is None:
+    rule = _split_rule_spec(raw_line)
+    if rule is None:
         raise ValidationException(line_number, "STRUCTURE_LINE_NOT_VALID", "Line not valid: " + raw_line)
 
-    # --- Type (or @Name reference) ---
-    type_ = matcher.group("type")
-    if type_ is not None:
-        type_ = trim(type_)
-    if not type_:
-        type_ = None
-
-    # --- Cardinality (STXT-TEMPLATE-SPEC 7.1) ---
-    count = trim(matcher.group("count") or "")
+    # --- Type (or @Name reference); cardinality (STXT-TEMPLATE-SPEC 7.1) ---
+    count_part, type_, values_str = rule
+    count = count_part or ""
 
     min_ = None
     max_ = None
@@ -84,7 +117,6 @@ def parse_child_line(raw_line: str, line_number: int) -> ChildLine:
     # Brackets being present (even empty ones, "[]") count as an explicit definition of
     # values: a non-None (possibly empty) list, to tell it apart from no brackets at all.
     values = None
-    values_str = matcher.group("values")
     if values_str is not None:
         values = []
         parts = values_str.split(",")
@@ -110,10 +142,14 @@ def _parse_count(num: str, count: str, raw_line: str, line_number: int) -> int:
     # 2^32 - 1 like Min/Max in a schema (7.1)
     if not is_natural(num):
         raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
+    # A numeral with more digits than MAX_CARDINALITY has exceeds the bound whatever its value:
+    # rejected before converting, so int() (limited to 4 300 digits) never gets to raise
+    if len(num) > MAX_CARDINALITY_DIGITS:
+        raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
     value = parse_integer(num)
     if value > MAX_CARDINALITY:
         raise ValidationException(line_number, "CARDINALITY_NOT_VALID", f"Invalid count {count} in line: {raw_line}")
     return value
 
 
-__all__ = ["parse_child_line", "CHILD_LINE_PATTERN"]
+__all__ = ["parse_child_line"]

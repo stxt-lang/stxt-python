@@ -24,6 +24,9 @@ class NodeDefinition:
         self._children: dict[str, ChildDefinition] = {}
         # Allowed values for the ENUM type. Set semantics: no duplicates.
         self._values: list[str] = []
+        # Membership is O(1) through the set (an ENUM of 40 000 values took 10 s with a list scan);
+        # the list keeps the declaration order for get_values()
+        self._value_set: set[str] = set()
 
         # The inline value of Schema/Node must itself be a valid STXT node name (7.1)
         if not is_valid_node_name(self._name):
@@ -60,15 +63,16 @@ class NodeDefinition:
     def add_value(self, value: str, line: int) -> None:
         """Adds an allowed value (ENUM). Duplicated values (after trim) are ``VALUE_DUPLICATED``."""
         value = trim_to_not_null(value)
-        if value in self._values:
+        if value in self._value_set:
             raise ValidationException(line, "VALUE_DUPLICATED", f"The value {value} is duplicated")
         self._values.append(value)
+        self._value_set.add(value)
 
     def is_allowed_value(self, value: str) -> bool:
         """True if no restricted values are defined, or if the value is among the allowed ones."""
         if not self._values:
             return True
-        return value in self._values
+        return value in self._value_set
 
     def get_values(self) -> list[str]:
         return self._values

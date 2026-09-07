@@ -37,7 +37,7 @@ from .line_indent import LineIndent, parse_line
 from .name_namespace import parse_name_namespace
 from .node import InlineNode, Node, TextNode
 from .parse_result import ParseResult
-from .platform import split_lines
+from .platform import iter_lines
 from .string_utils import remove_utf8_bom, trim
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -64,6 +64,12 @@ class Parser:
         self._observers: list["Observer"] = []
         self._stream_observers: list["StreamObserver"] = []
         self._validators: list["Validator"] = []
+        # A limit is an integer >= 0 or -1 (STXT-SPEC 11.2): anything else is rejected here
+        # rather than letting -2 reject every line
+        for name, value in (("max_nesting", max_nesting), ("max_line_length", max_line_length),
+                            ("max_input_size", max_input_size)):
+            if not isinstance(value, int) or isinstance(value, bool) or value < -1:
+                raise ValueError(f"{name} must be an integer >= 0, or -1 to disable it, got {value!r}")
         self._max_nesting = max_nesting
         self._max_line_length = max_line_length
         self._max_input_size = max_input_size
@@ -99,14 +105,12 @@ class Parser:
         :class:`LimitException`, which aborts and is in every case the last error collected."""
         result = ParseResult()
 
-        lines = split_lines(content)
-
-        # The final line break terminates the last line, it is not an extra empty line
-        # (this avoids adding a spurious line to a '>>' block at EOF, STXT-SPEC 10.3)
-        if lines and lines[-1] == "":
-            lines.pop()
-
-        self._parse_lines(lines, result)
+        # The lines are produced lazily: splitting the whole content up front materialises
+        # every line before max_input_size can act (STXT-SPEC 11.2: the limit is checked as
+        # the input is consumed), so an input far above the limit cost memory proportional to
+        # its size instead of to the limit. The iterator also applies the final-line-break
+        # rule: "a\n" is one line, not "a" plus an empty line (STXT-SPEC 10.3).
+        self._parse_lines(iter_lines(content), result)
 
         return result
 
@@ -117,7 +121,11 @@ class Parser:
         :class:`StreamObserver` s (each completed root by ``on_root_node()``, each error by
         ``on_error()``), so memory holds one root tree at a time. This is the entry point for
         files that do not fit in memory. The trailing line break of each item, if present, is
-        removed, so a file object opened in text mode works as it is."""
+        removed, so a file object opened in text mode works as it is: open it with
+        ``newline="\\n"`` (and ``encoding="utf-8"``), because the default universal newlines
+        of :func:`open` would also split lines at a lone CR, which is content (STXT-SPEC 3),
+        unlike :meth:`parse`. Each item is read whole by the caller before the line limit
+        applies to it: the limit bounds what is processed, not what the source reads."""
         self._parse_lines((_without_line_break(line) for line in lines), None)
 
     def _parse_lines(self, lines: Iterable[str], result: Optional[ParseResult]) -> None:

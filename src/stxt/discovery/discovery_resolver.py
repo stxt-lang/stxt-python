@@ -43,6 +43,9 @@ class DiscoveryResolver:
 
     def __init__(self, fs: DiscoveryFileSystem, env: DiscoveryEnvironment,
                  max_ascent: int = DEFAULT_MAX_ASCENT) -> None:
+        # An unbounded or non-integer ascent would turn a cyclic parent_of into an endless loop
+        if not isinstance(max_ascent, int) or isinstance(max_ascent, bool) or max_ascent < 0:
+            raise ValueError(f"max_ascent must be an integer >= 0, got {max_ascent!r}")
         self._fs = fs
         self._env = env
         self._max_ascent = max_ascent
@@ -73,14 +76,14 @@ class DiscoveryResolver:
             ascended = 0
             while ascended < self._max_ascent and directory is not None:
                 candidate = self._fs.join(directory, STXT_DIR)
-                if self._fs.is_directory(candidate):
+                if self._is_directory(candidate):
                     chain.append(candidate)
                 directory = self._fs.parent_of(directory)
                 ascended += 1
 
         # User and system levels (4.2). The ascent may have reached them already: deduplicate.
         for directory in (self._env.get_user_level_dir(), self._env.get_system_level_dir()):
-            if directory is not None and directory not in chain and self._fs.is_directory(directory):
+            if directory is not None and directory not in chain and self._is_directory(directory):
                 chain.append(directory)
 
         return chain
@@ -99,9 +102,17 @@ class DiscoveryResolver:
     def _existing_unique(self, dirs: list[str]) -> list[str]:
         result: list[str] = []
         for directory in dirs:
-            if directory not in result and self._fs.is_directory(directory):
+            if directory not in result and self._is_directory(directory):
                 result.append(directory)
         return result
+
+    def _is_directory(self, path: str) -> bool:
+        # is_directory is not supposed to raise (DiscoveryFileSystem contract), but nothing an
+        # adapter raises may escape resolve() (8): a failure means "not a directory"
+        try:
+            return self._fs.is_directory(path)
+        except Exception:  # noqa: BLE001
+            return False
 
     # ---------------------------------------------------------------- levels (5, 7 and 8)
 
@@ -125,14 +136,21 @@ class DiscoveryResolver:
         # files, never an exception. Together with adapters that do not follow directory symlinks,
         # this stops symlink loops and pathological trees from turning resolution into unbounded
         # recursion or an escaping exception.
-        return self._collect_files_at(directory, 0)
+        return self._collect_files_at(directory, 0, set())
 
-    def _collect_files_at(self, directory: str, depth: int) -> list[str]:
+    def _collect_files_at(self, directory: str, depth: int, visited: set[str]) -> list[str]:
         files: list[str] = []
 
         # Safeguard against symlink loops and pathological trees (§10): stop descending.
         if depth >= DEFAULT_MAX_DESCENT:
             return files
+
+        # A directory already visited in this level (a cycle the adapter did not cut, or two
+        # entries for one directory) is not descended again: the depth limit bounds the depth,
+        # not the work, and a cycle of breadth 2 would otherwise be entered 2^32 times.
+        if directory in visited:
+            return files
+        visited.add(directory)
 
         try:
             entries = _sort_by_path(self._fs.list_directory(directory))
@@ -141,7 +159,7 @@ class DiscoveryResolver:
 
         for entry in entries:
             if entry.is_directory:
-                files.extend(self._collect_files_at(entry.path, depth + 1))
+                files.extend(self._collect_files_at(entry.path, depth + 1, visited))
             else:
                 files.append(entry.path)
         return files

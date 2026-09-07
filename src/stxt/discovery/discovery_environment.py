@@ -42,7 +42,10 @@ class SystemDiscoveryEnvironment(DiscoveryEnvironment):
             return None
         if value == "":
             return []
-        return value.split(os.pathsep)
+        # An empty entry (a leading, trailing or doubled separator, as in ":/opt/defs" when the
+        # variable is extended from an undefined value) is dropped (DISCOVERY-SPEC 6): it must
+        # not stand for the working directory
+        return [entry for entry in value.split(os.pathsep) if entry != ""]
 
     def get_user_level_dir(self) -> Optional[str]:
         try:

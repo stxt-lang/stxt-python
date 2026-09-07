@@ -110,10 +110,13 @@ class Node(ABC):
     def get_namespace(self) -> str:
         """Effective namespace: the declared one or, failing that, the parent's effective one;
         ``""`` for a root that declares none."""
-        if not is_empty(self._declared_namespace):
-            return self._declared_namespace
-        if self._parent is not None:
-            return self._parent.get_namespace()
+        # Iterative, like get_level(): a tree built by a program has no nesting limit, and the
+        # recursive walk hit RecursionError at a depth of a few hundred
+        node: Optional[Node] = self
+        while node is not None:
+            if not is_empty(node._declared_namespace):
+                return node._declared_namespace
+            node = node._parent
         return ""
 
     # ---------------------------------------------------------------- position
@@ -212,6 +215,15 @@ class InlineNode(Node):
         return self._value
 
     def set_value(self, new_value: Optional[str]) -> None:
+        """Sets the inline value (trimmed). A value is one source line (STXT-SPEC 5): a line
+        break inside it has no representation, and the writer would emit it as a new line, which
+        re-parses as another node (structure injected through data). A lone CR is content.
+
+        Raises:
+            RuntimeException: ``LINE_BREAK_NOT_ALLOWED`` if the value contains a LF.
+        """
+        if new_value is not None and "\n" in new_value:
+            raise RuntimeException("LINE_BREAK_NOT_ALLOWED", "A node value cannot contain a line break")
         self._value = trim_to_not_null(new_value)
 
     def get_text(self) -> str:
@@ -238,13 +250,20 @@ class InlineNode(Node):
             raise RuntimeException("NODE_ALREADY_ATTACHED",
                                    f"Node '{child.get_name()}' already has a parent: detach it first")
 
-        # Walk up from this node (itself included) looking for the child among the ancestors
-        p: Optional[Node] = self
-        while p is not None:
-            if p is child:
-                raise RuntimeException("NODE_CYCLE",
-                                       f"Node '{child.get_name()}' cannot be a child of itself or of one of its descendants")
-            p = p.get_parent()
+        # The child has no parent, so it can only be an ancestor of this node if it is this node
+        # itself or if this node hangs below it, which needs the child to have children. A
+        # childless child (every node the parser attaches) skips the O(depth) walk: a chain of
+        # n nodes is built in O(n) instead of O(n^2).
+        if child is self:
+            raise RuntimeException("NODE_CYCLE",
+                                   f"Node '{child.get_name()}' cannot be a child of itself or of one of its descendants")
+        if isinstance(child, InlineNode) and child._children:
+            p: Optional[Node] = self.get_parent()
+            while p is not None:
+                if p is child:
+                    raise RuntimeException("NODE_CYCLE",
+                                           f"Node '{child.get_name()}' cannot be a child of itself or of one of its descendants")
+                p = p.get_parent()
 
         if index is None:
             index = len(self._children)
@@ -339,19 +358,35 @@ class TextNode(Node):
 
     def set_text(self, text: Union[str, Iterable[str], None]) -> None:
         """Replaces the whole text: a string is split into lines (LF or CRLF); ``None`` empties
-        the node; any other iterable is taken as the lines themselves."""
+        the node; any other iterable is taken as the lines themselves (none of which may
+        contain a line break, see :meth:`add_text_line`)."""
         if text is None:
             self._lines = []
         elif isinstance(text, str):
             self._lines = split_lines(text)
         else:
-            self._lines = [str(line) for line in text]
+            # Validated before replacing, so a rejected list leaves the node as it was
+            self._lines = [self._check_line(str(line)) for line in text]
 
     def set_text_lines(self, new_lines: Iterable[str]) -> None:
         self.set_text(list(new_lines))
 
     def add_text_line(self, text_line: str) -> None:
-        self._lines.append(text_line)
+        """Appends a text line. A text line is one source line (STXT-SPEC 6): a line break
+        inside it has no representation, and written out the part after it would land at level
+        0 and re-parse as another node (structure injected through data). Pass a multi-line
+        text as a string to :meth:`set_text`, which splits it. A lone CR is content.
+
+        Raises:
+            RuntimeException: ``LINE_BREAK_NOT_ALLOWED`` if the line contains a LF.
+        """
+        self._lines.append(self._check_line(text_line))
+
+    @staticmethod
+    def _check_line(line: str) -> str:
+        if "\n" in line:
+            raise RuntimeException("LINE_BREAK_NOT_ALLOWED", "A text line cannot contain a line break")
+        return line
 
     def clear_text(self) -> None:
         self._lines = []

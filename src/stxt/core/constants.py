@@ -19,6 +19,9 @@ DEFAULT_MAX_INPUT_SIZE = 10000000
 # (STXT-SCHEMA-SPEC 10, STXT-TEMPLATE-SPEC 7.1). A greater value is CARDINALITY_NOT_VALID;
 # "no maximum" is said by omitting Max.
 MAX_CARDINALITY = 4294967295
+# Digits of MAX_CARDINALITY: a longer numeral exceeds the bound before it is converted, which
+# keeps ``int()`` (limited to 4 300 digits by CPython) out of reach of a definition.
+MAX_CARDINALITY_DIGITS = 10
 
 # Version of STXT-SPEC (the base syntax) this library implements; "STXT 1.0" on its own means
 # this number (STXT-SPEC §1.1). Each specification is versioned independently. It is distinct

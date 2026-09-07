@@ -5,6 +5,57 @@ language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number;
 number may still move on its own for something that concerns only this package, such as its
 published metadata.
 
+## 1.0.2 - 2026-09-07
+
+**Security review of the three ports** (js, java, python), same scope as `@stxt-lang/core`
+and `dev.stxt:stxt-core` 1.0.1 (this package is one patch ahead because its 1.0.1 was the
+packaging release below). A patch: fixes only, no new feature. No language change: STXT-SPEC
+stays at 1.0 and `SPEC_VERSION` too; STXT-DISCOVERY-SPEC gained one clarifying sentence (an
+empty `STXT_PATH` entry is ignored). The package passes the conformance kit 1.0.1 (one new
+case).
+
+### Fixed
+
+- `parse_child_line` (the `(count) TYPE [values]` of a template `Structure` line) no longer
+  uses a regex: its blank runs around lazy groups backtracked in O(n³) on a line without the
+  closing `]`, and a 10 000-character line took minutes. A hand-written scan keeps the same
+  grammar exactly.
+- A cardinality of more than 10 digits is `CARDINALITY_NOT_VALID` before `int()` sees it:
+  CPython refuses to convert more than 4 300 digits and the `ValueError` escaped from
+  `add_schema`, `add_template` and `add_file`.
+- Namespaces are lower-cased ASCII-only (`lower_case`): `str.lower()` turned U+212A KELVIN
+  SIGN into `k`, so `(Kelvin.x)` with that sign was accepted as `kelvin.x`, the homograph
+  STXT-SPEC §7.1 rules out. The format is checked by a linear scan identical in the three
+  ports (no regex). Conformance case `parse/namespace-kelvin-sign`.
+- `SystemDiscoveryEnvironment.get_stxt_path()` drops empty entries (`:/opt/defs`, a trailing
+  `:`), per STXT-DISCOVERY-SPEC §6.
+- `DiscoveryResolver`: each directory of a level is visited once (a cycle of breadth 2 in an
+  injected file system was entered 2³² times); an `is_directory` that raises no longer makes
+  `resolve()` raise; `max_ascent` must be an integer ≥ 0.
+- `OsDiscoveryFileSystem` lists only regular files and directories (a FIFO under `.stxt/`
+  blocked the resolution forever) and rejects a definition file above
+  `MAX_DEFINITION_FILE_BYTES` (4 × the default input limit) before reading it whole.
+- `ENUM` `INVALID_VALUE` messages no longer list the allowed values: every invalid node
+  carried a copy of the whole list (2 000 nodes against a 10 000-value ENUM gave 180 MB of
+  messages). ENUM values and schema node names are kept in sets: loading an ENUM of 40 000
+  values or a schema of 40 000 definitions was quadratic.
+- `Node.get_namespace()` is iterative (a `RecursionError` at depth 1 000 in a tree built by
+  a program); `add_child` skips the ancestor walk for a childless node.
+- `parse_result` reads the lines lazily instead of splitting the whole text up front, so an
+  input far above `max_input_size` costs memory proportional to the limit, not to the input.
+- `parse_stream` documents that a text file must be opened with `newline="\n"`: the default
+  universal newlines also split at a lone CR, which is content (STXT-SPEC §3).
+
+### Added
+
+- `LINE_BREAK_NOT_ALLOWED` (`RuntimeException`): `set_value`, `add_text_line`,
+  `set_text_lines` and the list form of `set_text` reject a value or a text line holding a
+  LF. Such a value has no representation: `NodeWriter` wrote it as a new line, which
+  re-parsed as another node — structure injected through data. A multi-line text goes through
+  `set_text(str)`.
+- `Parser(max_*)` reject a value that is not an integer ≥ 0 or -1 (`ValueError`).
+- `stxt.core.validations.is_valid_namespace_format`, `MAX_CARDINALITY_DIGITS`.
+
 ## 1.0.1 - 2026-09-06
 
 **Packaging only.** No change to the language, the behaviour or the public API: apart from

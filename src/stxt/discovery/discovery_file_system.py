@@ -12,6 +12,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
+from ..core.constants import DEFAULT_MAX_INPUT_SIZE
+
+#: Largest definition file a resolution directory loads: the parser's default input limit
+#: in characters, times the 4 bytes a character takes at most in UTF-8.
+MAX_DEFINITION_FILE_BYTES = 4 * DEFAULT_MAX_INPUT_SIZE
+
 
 @dataclass(frozen=True)
 class DiscoveryEntry:
@@ -69,8 +75,10 @@ class OsDiscoveryFileSystem(DiscoveryFileSystem):
                     try:
                         if entry.is_symlink():
                             continue  # never follow a symlink (directory or file)
-                        entries.append(DiscoveryEntry(entry.path, entry.name,
-                                                      entry.is_dir(follow_symlinks=False)))
+                        is_dir = entry.is_dir(follow_symlinks=False)
+                        if not is_dir and not entry.is_file(follow_symlinks=False):
+                            continue  # a FIFO, socket or device: open() could block forever
+                        entries.append(DiscoveryEntry(entry.path, entry.name, is_dir))
                     except OSError:
                         continue  # an entry that cannot be stat'd contributes nothing
         except OSError:
@@ -78,6 +86,12 @@ class OsDiscoveryFileSystem(DiscoveryFileSystem):
         return entries
 
     def read_file(self, path: str) -> str:
+        # A definition is parsed with the default limits (DEFAULT_MAX_INPUT_SIZE characters, at
+        # most 4 bytes each in UTF-8), so a bigger file cannot be within them: rejected by size
+        # before it is read whole, which kept the memory of a load proportional to the file
+        # instead of to the limit. The OSError becomes a DISCOVERY_NOT_PARSEABLE error.
+        if os.path.getsize(path) > MAX_DEFINITION_FILE_BYTES:
+            raise OSError(f"Definition file larger than {MAX_DEFINITION_FILE_BYTES} bytes: {path}")
         with open(path, encoding="utf-8") as f:
             return f.read()
 
