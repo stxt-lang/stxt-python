@@ -62,10 +62,11 @@ def _first_validation_error(text, provider):
     return None
 
 
-def test_declares_a_kit_version_and_the_specifications_it_covers():
-    assert re.fullmatch(r"\d+\.\d+(\.\d+)?", MANIFEST["kit"])
-    assert MANIFEST["specifications"]["STXT-SPEC"] == "1.0"
-    assert MANIFEST["specifications"]["STXT-TREE-SPEC"] == "1.0"
+def test_declares_a_kit_date_and_the_dated_specifications_it_covers():
+    date = r"\d{4}-\d{2}-\d{2}"
+    assert re.fullmatch(date, MANIFEST["kit"])
+    for s in ("STXT-SPEC", "STXT-TREE-SPEC", "STXT-SCHEMA-SPEC", "STXT-TEMPLATE-SPEC", "STXT-DISCOVERY-SPEC"):
+        assert re.fullmatch(date, MANIFEST["specifications"][s]), s
     assert CASES
 
 

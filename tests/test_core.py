@@ -1,5 +1,8 @@
 """Core conformance regressions of the parser: STXT-SPEC error codes and behaviours."""
 
+import json
+import re
+
 import pytest
 
 import stxt
@@ -300,20 +303,21 @@ def test_no_error_message_carries_its_own_code_or_line():
             assert f"line {error.line}" not in error.message.lower() or "indent" in error.message.lower(), text
 
 
-def test_spec_version_is_the_version_of_the_specifications():
-    assert SPEC_VERSION == "1.0"
+def test_spec_version_is_the_date_of_the_specification_text():
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", SPEC_VERSION), SPEC_VERSION
     assert stxt.SPEC_VERSION is SPEC_VERSION
     assert "SPEC_VERSION" in stxt.__all__ and "__version__" in stxt.__all__
     assert stxt.__version__ != SPEC_VERSION, "the package version is not the spec version"
 
 
-def test_spec_version_equals_the_version_declared_by_stxt_spec():
-    # Tied to Metadata/Version of STXT-SPEC itself (stxt-lang/es/stxt-core-ref.stxt).
-    file = find_stxt_lang() / "es" / "stxt-core-ref.stxt"
-    root = Parser().parse(read(file))[0]
-    version = root.get_child("Metadata").get_child("Version")
-    assert version is not None, "STXT-SPEC has no Metadata/Version"
-    assert SPEC_VERSION == version.get_value()
+def test_spec_version_equals_the_date_the_conformance_kit_pins():
+    # The specifications carry a date and a status, not a version number (STXT-SPEC 1.1), and
+    # conformance is declared against the kit: the constant is the date the kit pins for
+    # STXT-SPEC (conformance/manifest.json), not the Last modif of the specification, so an
+    # editorial change of the text does not touch the library.
+    file = find_stxt_lang() / "conformance" / "manifest.json"
+    manifest = json.loads(file.read_text(encoding="utf-8"))
+    assert SPEC_VERSION == manifest["specifications"]["STXT-SPEC"]
 
 
 # ---------------------------------------------------------------- observers
