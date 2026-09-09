@@ -70,6 +70,13 @@ def test_declares_a_kit_date_and_the_dated_specifications_it_covers():
     assert CASES
 
 
+def test_marks_the_optional_cases_with_a_requirement_level_of_should_or_may():
+    # The official ports run every case, whatever its level; the level only has to be well formed.
+    for c in CASES:
+        if "requirement" in c:
+            assert c["requirement"] in ("SHOULD", "MAY"), f"{c['id']}: requirement {c['requirement']}"
+
+
 def test_declares_cumulative_profiles_that_cover_every_category():
     profiles = MANIFEST["profiles"]
     covered = set()
