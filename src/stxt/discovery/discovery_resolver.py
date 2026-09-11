@@ -76,7 +76,11 @@ class DiscoveryResolver:
             ascended = 0
             while ascended < self._max_ascent and directory is not None:
                 candidate = self._fs.join(directory, STXT_DIR)
-                if self._is_directory(candidate):
+                # A linked .stxt forms no level (4.1, 10): the ancestors are written by whoever
+                # created the project, and a link would take the resolution into a foreign tree.
+                # Asked before is_directory, which follows links. The user and system levels
+                # below, and STXT_PATH, are followed: the user chooses them.
+                if not self._is_symbolic_link(candidate) and self._is_directory(candidate):
                     chain.append(candidate)
                 directory = self._fs.parent_of(directory)
                 ascended += 1
@@ -113,6 +117,15 @@ class DiscoveryResolver:
             return self._fs.is_directory(path)
         except Exception:  # noqa: BLE001
             return False
+
+    def _is_symbolic_link(self, path: str) -> bool:
+        # A candidate .stxt that is itself a symbolic link forms no project level (4.1, 10).
+        # Guarded like _is_directory, but an adapter that raises here is treated as "a link" —
+        # the conservative answer: the candidate is skipped.
+        try:
+            return self._fs.is_symbolic_link(path)
+        except Exception:  # noqa: BLE001
+            return True
 
     # ---------------------------------------------------------------- levels (5, 7 and 8)
 

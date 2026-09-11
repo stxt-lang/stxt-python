@@ -5,6 +5,31 @@ language scope as `@stxt-lang/core` and `dev.stxt:stxt-core` of the same number;
 number may still move on its own for something that concerns only this package, such as its
 published metadata.
 
+## 1.0.4 - 2026-09-10
+
+**A project-level `.stxt` that is a symbolic link forms no level** (STXT-DISCOVERY-SPEC §4.1,
+§10, text of 2026-09-10). The ancestors of a document are written by whoever created the
+project — a cloned repository — and a `.stxt -> /` or `.stxt -> $HOME` made the resolver walk
+that whole tree, parsing every file as a definition and leaking the first line that failed to
+parse through the error message. Links inside a resolution directory were already omitted
+(1.0.0); the level itself was still followed. The user level, the system level and the
+`STXT_PATH` entries are still followed when they are links (§4.2, §6): the user chooses them,
+and `$HOME/.stxt` linked to a dotfiles repository is an intended use. Same scope as
+`@stxt-lang/core` and `dev.stxt:stxt-core` 1.0.3. No syntax change: a patch.
+
+### Added
+
+- `DiscoveryFileSystem.is_symbolic_link(path)`, a non-abstract method that answers `False`, so
+  every existing subclass keeps working as before; `OsDiscoveryFileSystem` implements it with
+  `os.path.islink` (and `os.path.isjunction` on Python 3.12+, for Windows junctions). The
+  resolver consults it only during the project-level ascent, before `is_directory`, and treats
+  an adapter that raises as "a link" (the candidate is skipped).
+
+### Changed
+
+- `DiscoveryResolver.resolve_chain` skips an ancestor `.stxt` that is a symbolic link. A document
+  under the home whose `$HOME/.stxt` is a link gets it as the user level, not as a project level.
+
 ## 1.0.3 - 2026-09-07
 
 **Date and status instead of a version number for the specifications** (STXT-SPEC §1.1). The

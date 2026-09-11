@@ -337,6 +337,110 @@ class TestBoundedAndTolerantDescent:
         assert all("SECRET-CONTENT" not in e.message for e in result.get_errors())
 
 
+class TestLevelSymbolicLinks:
+    """DISCOVERY-SPEC 4.1, 4.2, 6 and 10: a linked ancestor .stxt forms no project level; the
+    user level, the system level and an STXT_PATH entry are followed when they are links."""
+
+    class LinkedMemoryFileSystem(MemoryFileSystem):
+        def __init__(self, files, links):
+            super().__init__(files)
+            self.links = set(links)
+
+        def is_symbolic_link(self, path):
+            return path in self.links
+
+    def test_an_ancestor_stxt_that_is_a_symbolic_link_forms_no_project_level(self):
+        fs = self.LinkedMemoryFileSystem({
+            "/repo/.stxt/a.stxt": template("com.acme.a", "A"),
+            "/repo/web/.stxt/b.stxt": template("com.acme.b", "B"),
+        }, ["/repo/.stxt"])
+        resolver = DiscoveryResolver(fs, FakeEnvironment())
+        assert resolver.resolve_chain("/repo/web/docs") == ["/repo/web/.stxt"]
+        result = resolver.resolve("/repo/web/docs")
+        assert result.get_schema("com.acme.b") is not None, "the real level loads"
+        assert result.get_schema("com.acme.a") is None, "the linked level is not loaded"
+        assert result.get_errors() == []
+
+    def test_the_user_and_system_levels_are_followed_when_they_are_symbolic_links(self):
+        fs = self.LinkedMemoryFileSystem({
+            "/home/ana/.stxt/b.stxt": template("org.ana.b", "B"),
+            "/etc/stxt/c.stxt": template("org.corp.c", "C"),
+        }, ["/home/ana/.stxt", "/etc/stxt"])
+        resolver = DiscoveryResolver(fs, FakeEnvironment(None, "/home/ana/.stxt", "/etc/stxt"))
+        assert resolver.resolve_chain("/repo") == ["/home/ana/.stxt", "/etc/stxt"]
+        assert resolver.resolve("/repo").get_schema("org.ana.b") is not None
+
+    def test_a_linked_home_stxt_is_the_user_level_of_a_document_under_the_home_not_a_project_level(self):
+        fs = self.LinkedMemoryFileSystem({
+            "/home/ana/.stxt/b.stxt": template("org.ana.b", "B"),
+            "/home/.stxt/h.stxt": template("org.home.h", "H"),
+        }, ["/home/ana/.stxt"])
+        resolver = DiscoveryResolver(fs, FakeEnvironment(None, "/home/ana/.stxt", None))
+        # Were the link accepted by the ascent, it would come before /home/.stxt.
+        assert resolver.resolve_chain("/home/ana/notes") == ["/home/.stxt", "/home/ana/.stxt"]
+
+    def test_an_stxt_path_entry_is_followed_when_it_is_a_symbolic_link(self):
+        fs = self.LinkedMemoryFileSystem({"/opt/defs/a.stxt": template("com.acme.a", "A")}, ["/opt/defs"])
+        assert DiscoveryResolver(fs, FakeEnvironment(["/opt/defs"])).resolve_chain("/repo") == ["/opt/defs"]
+
+    def test_an_adapter_without_the_operation_behaves_as_before(self):
+        fs = MemoryFileSystem({"/repo/.stxt/a.stxt": template("com.acme.a", "A")})
+        assert fs.is_symbolic_link("/repo/.stxt") is False  # the base-class default
+        assert DiscoveryResolver(fs, FakeEnvironment()).resolve_chain("/repo") == ["/repo/.stxt"]
+
+    def test_an_adapter_that_raises_in_is_symbolic_link_skips_the_candidate_instead_of_escaping(self):
+        class RaisingFileSystem(MemoryFileSystem):
+            def is_symbolic_link(self, path):
+                raise OSError("lstat failed")
+
+        fs = RaisingFileSystem({"/repo/.stxt/a.stxt": template("com.acme.a", "A")})
+        assert DiscoveryResolver(fs, FakeEnvironment()).resolve_chain("/repo") == []
+
+    def test_os_file_system_skips_a_real_linked_ancestor_stxt(self, tmp_path):
+        # repo/.stxt -> outside/defs, a directory outside the repository holding a valid
+        # definition, as a cloned repository could carry; repo/web/.stxt is real.
+        outside = tmp_path / "outside" / "defs"
+        outside.mkdir(parents=True)
+        (outside / "a.stxt").write_text(template("com.acme.a", "A"), encoding="utf-8")
+        web_stxt = tmp_path / "repo" / "web" / ".stxt"
+        web_stxt.mkdir(parents=True)
+        (web_stxt / "b.stxt").write_text(template("com.acme.b", "B"), encoding="utf-8")
+        try:
+            os.symlink(outside, tmp_path / "repo" / ".stxt", target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("the operating system does not allow creating symbolic links")
+
+        fs = OsDiscoveryFileSystem()
+        assert fs.is_symbolic_link(str(tmp_path / "repo" / ".stxt")) is True
+        assert fs.is_symbolic_link(str(web_stxt)) is False
+        assert fs.is_symbolic_link(str(tmp_path / "missing")) is False
+
+        resolver = DiscoveryResolver(fs, FakeEnvironment())
+        document_dir = str(tmp_path / "repo" / "web" / "docs")
+        assert resolver.resolve_chain(document_dir) == [str(web_stxt)]
+        result = resolver.resolve(document_dir)
+        assert result.get_schema("com.acme.b") is not None
+        assert result.get_schema("com.acme.a") is None, "the linked level is not loaded"
+
+    def test_os_file_system_follows_a_real_linked_user_level(self, tmp_path):
+        # $HOME/.stxt -> dotfiles/stxt, the intended use; the document lives under the home, so
+        # the ascent meets the link first and skips it: the user level takes it.
+        dotfiles = tmp_path / "dotfiles" / "stxt"
+        dotfiles.mkdir(parents=True)
+        (dotfiles / "b.stxt").write_text(template("org.ana.b", "B"), encoding="utf-8")
+        home = tmp_path / "home" / "ana"
+        home.mkdir(parents=True)
+        user_level = home / ".stxt"
+        try:
+            os.symlink(dotfiles, user_level, target_is_directory=True)
+        except (OSError, NotImplementedError):
+            pytest.skip("the operating system does not allow creating symbolic links")
+
+        resolver = DiscoveryResolver(OsDiscoveryFileSystem(), FakeEnvironment(None, str(user_level), None))
+        assert resolver.resolve_chain(str(home / "notes")) == [str(user_level)]
+        assert resolver.resolve(str(home / "notes")).get_schema("org.ana.b") is not None
+
+
 class TestHostAdapters:
     def test_os_file_system_over_a_real_directory(self, tmp_path):
         (tmp_path / "project" / ".stxt").mkdir(parents=True)

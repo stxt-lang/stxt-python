@@ -29,11 +29,22 @@ class DiscoveryEntry:
 
 
 class DiscoveryFileSystem(ABC):
-    """The five file-system operations the resolver needs."""
+    """The file-system operations the resolver needs: five abstract ones, and one with a default."""
 
     @abstractmethod
     def is_directory(self, path: str) -> bool:
-        """True if the path exists and is a directory; False otherwise (I/O errors included)."""
+        """True if the path exists and is a directory; False otherwise (I/O errors included).
+        Follows symbolic links: a linked user level, system level or ``STXT_PATH`` entry is a
+        directory (DISCOVERY-SPEC 4.2, 6)."""
+
+    def is_symbolic_link(self, path: str) -> bool:
+        """True if the path is a symbolic link — or, on Windows, a junction where Python tells
+        them apart — whatever it points to and whether or not the target exists; False otherwise
+        (I/O errors included). Only consulted during the project-level ascent (DISCOVERY-SPEC
+        4.1): the ``.stxt`` of an ancestor that is itself a link forms no level. The default
+        answers False, for an implementation over an abstraction with no links (an in-memory
+        tree, a ZIP) and for every implementation written before the operation existed."""
+        return False
 
     @abstractmethod
     def list_directory(self, path: str) -> list[DiscoveryEntry]:
@@ -58,6 +69,18 @@ class OsDiscoveryFileSystem(DiscoveryFileSystem):
     def is_directory(self, path: str) -> bool:
         try:
             return os.path.isdir(path)
+        except OSError:
+            return False
+
+    def is_symbolic_link(self, path: str) -> bool:
+        # The link itself, whatever it points to (DISCOVERY-SPEC 4.1: a linked ancestor .stxt
+        # forms no level). islink() is False for a Windows junction; os.path.isjunction (3.12+)
+        # tells those apart where it exists.
+        try:
+            if os.path.islink(path):
+                return True
+            is_junction = getattr(os.path, "isjunction", None)
+            return is_junction is not None and bool(is_junction(path))
         except OSError:
             return False
 
